@@ -11,6 +11,7 @@ import { HomeScreen } from './components/screens/HomeScreen';
 import { MapNavigationScreen } from './components/screens/MapNavigationScreen';
 import { ScheduleDirectoryScreen } from './components/screens/ScheduleDirectoryScreen';
 import { AssistantScreen } from './components/screens/AssistantScreen';
+import { InstikiLogo } from './components/InstikiLogo';
 import {
   BookOpen,
   CalendarDays,
@@ -121,8 +122,8 @@ export function App() {
       {/* Desktop Presentation Studio Header (hidden on very small phones if desired, shown nicely on desktop) */}
       <header className="hidden sm:flex items-center justify-between px-5 py-3 bg-slate-900/90 border-b border-slate-800 backdrop-blur sticky top-0 z-30">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#D32F2F] to-red-700 flex items-center justify-center font-extrabold text-xs text-white shadow-sm">
-            IN
+          <div className="bg-white rounded-xl px-2 py-1.5 shadow-sm flex items-center justify-center">
+            <InstikiLogo variant="mark" />
           </div>
           <div>
             <div className="flex items-center gap-2">

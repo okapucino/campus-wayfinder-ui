@@ -8,6 +8,7 @@ import {
   StudentProfile,
 } from '../../data/campusData';
 import { getNodeById } from '../../utils/pathfinder';
+import { InstikiLogo } from '../InstikiLogo';
 import {
   Bell,
   Car,
@@ -92,13 +93,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <div className="bg-gradient-to-br from-[#141E46] via-[#1A2352] to-[#26347A] text-white px-4 pt-3 pb-5 rounded-b-3xl shadow-md">
         <div className="flex items-center justify-between gap-2 mb-3">
           <div>
-            <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-[#D32F2F] text-white font-extrabold text-xs shadow-xs">
-                IN
-              </span>
+            <div className="flex items-center gap-2">
+              <div className="bg-white rounded-lg px-1.5 py-1 shadow-xs flex items-center justify-center">
+                <InstikiLogo variant="mark" />
+              </div>
               <span className="font-extrabold text-sm tracking-tight">INSTIKI WayFinder</span>
             </div>
-            <p className="text-[11px] text-slate-300 mt-0.5">
+            <p className="text-[11px] text-slate-300 mt-1">
               Navigasi Parkiran ➔ Ruang Kelas
             </p>
           </div>
