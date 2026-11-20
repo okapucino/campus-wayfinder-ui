@@ -1,0 +1,21 @@
+# Campus WayFinder UI Prototype — Project Requirements
+# Stack: Frontend Web Prototype (React + TypeScript + Tailwind CSS + Vite)
+# Note: Install all JavaScript dependencies via `npm install` using package.json.
+
+# Runtime Environment
+# node >= 22.0.0
+# npm >= 10.0.0
+
+# Production Dependencies (package.json)
+react==19.1.0
+react-dom==19.1.0
+lucide-react==0.511.0
+
+# Development & Build Dependencies (package.json)
+vite==6.3.5
+@vitejs/plugin-react==4.4.1
+typescript==5.8.3
+tailwindcss==4.1.7
+@tailwindcss/vite==4.1.7
+@types/react==19.1.4
+@types/react-dom==19.1.5
