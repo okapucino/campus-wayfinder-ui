@@ -1,66 +1,79 @@
 /**
  * ============================================================================
- * DATA KAMPUS & JADWAL INSTIKI (CONTOH DATA REALISTIS — MUDAH DIEDIT)
+ * DATA KAMPUS INSTIKI — SESUAI DENAH RESMI KAMPUS (GEDUNG 1–6 & FASILITAS)
+ * Jl. Tukad Pakerisan No. 97, Panjer, Denpasar
  * ============================================================================
- * File ini berisi seluruh data lokasi parkiran, node denah 2D per lantai,
- * ruangan kelas/lab, mata kuliah, serta profil mahasiswa.
- *
- * Kelompok dapat dengan mudah menyesuaikan nama parkiran, kode ruangan,
- * lantai, atau jadwal mata kuliah di sini sesuai kondisi terbaru kampus INSTIKI.
+ * Logika Kode Ruang INSTIKI:
+ *   Digit 1 = Nomor Gedung (1–6)
+ *   Digit 2 = Nomor Lantai (1–5)
+ *   Contoh  : R.541 = Gedung 5, Lantai 4 (Lab DKV)
+ *             R.422 = Gedung 4, Lantai 2 (Mushola)
+ *             R.213 = Gedung 2, Lantai 1 (Ruang BAAK)
  */
 
-export type FloorNumber = 1 | 2 | 3 | 4;
+export type BuildingId = 'G1' | 'G2' | 'G3' | 'G4' | 'G5' | 'G6' | 'OUTDOOR';
 
-export type NodeKind =
-  | 'parking'
-  | 'room'
-  | 'corridor'
-  | 'stairs'
-  | 'elevator'
-  | 'facility'
-  | 'gate';
+export type RoomCategory =
+  | 'Layanan & Info'
+  | 'Laboratorium'
+  | 'Ruang Kelas'
+  | 'Area Ibadah'
+  | 'Pimpinan & Kantor'
+  | 'Fasilitas';
 
-export interface CampusNode {
+export interface StartPoint {
   id: string;
-  label: string;
-  shortLabel?: string;
-  floor: FloorNumber;
-  x: number; // SVG coordinate (0..360)
-  y: number; // SVG coordinate (0..400)
-  kind: NodeKind;
-  description?: string;
-  landmark?: string;
-  /** Bounding box for clickable room/area polygons in 2D map */
-  box?: {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  };
-}
-
-export interface CampusEdge {
-  from: string;
-  to: string;
-  distanceMeters: number;
-  /** Requires climbing/descending stairs (excluded in Lift/Accessible mode) */
-  isStairs?: boolean;
-  /** Uses campus elevator */
-  isElevator?: boolean;
-  /** Natural Indonesian instruction when walking from -> to */
-  instructionForward: string;
-  /** Natural Indonesian instruction when walking to -> from */
-  instructionBackward: string;
-  landmarkHint?: string;
-}
-
-export interface ParkingSpot {
-  id: string;
-  nodeId: string;
   name: string;
-  vehicleType: 'Motor' | 'Mobil';
-  areaHint: string;
-  badgeColor: string;
+  shortName: string;
+  vehicleType: 'Motor' | 'Mobil' | 'Pejalan Kaki';
+  x: number;
+  y: number;
+  desc: string;
+}
+
+export interface RoomItem {
+  id: string;
+  code: string;
+  name: string;
+  cat: RoomCategory;
+  desc: string;
+  buildingId: BuildingId;
+  buildingName: string;
+  floor: number;
+  floorLabel: string;
+  x: number;
+  y: number;
+}
+
+export interface BuildingFloor {
+  floor: number;
+  label: string;
+  rooms: Omit<RoomItem, 'id' | 'buildingId' | 'buildingName' | 'floor' | 'floorLabel' | 'x' | 'y'>[];
+}
+
+export interface BuildingInfo {
+  id: Exclude<BuildingId, 'OUTDOOR'>;
+  name: string;
+  subtitle: string;
+  quickTag: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string;
+  floors: BuildingFloor[];
+}
+
+export interface OutdoorFacility {
+  id: string;
+  name: string;
+  code: string;
+  cat: RoomCategory;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  desc: string;
 }
 
 export interface CourseSchedule {
@@ -81,1055 +94,740 @@ export interface StudentProfile {
   id: string;
   name: string;
   nim: string;
+  role: 'aktif' | 'maba' | 'tamu';
   prodi: 'TI' | 'DKV' | 'Umum';
   prodiLabel: string;
-  semester: number;
-  defaultParkingId: string;
+  defaultStartId: string;
   isGuest?: boolean;
 }
 
 export const STUDENT_PROFILES: StudentProfile[] = [
   {
     id: 'mhs-ti',
-    name: 'I Made Aditya',
+    name: 'I Made Aditya (TI)',
     nim: '2301010042',
+    role: 'aktif',
     prodi: 'TI',
-    prodiLabel: 'Teknik Informatika • Sem 5',
-    semester: 5,
-    defaultParkingId: 'parkir-depan',
+    prodiLabel: 'Mahasiswa Aktif • Teknik Informatika',
+    defaultStartId: 'parkir_depan',
   },
   {
     id: 'mhs-dkv',
-    name: 'Ni Luh Sari Dewi',
+    name: 'Ni Luh Sari (DKV)',
     nim: '2402020118',
+    role: 'aktif',
     prodi: 'DKV',
-    prodiLabel: 'Desain Komunikasi Visual • Sem 3',
-    semester: 3,
-    defaultParkingId: 'parkir-belakang',
+    prodiLabel: 'Mahasiswa Aktif • Desain Komunikasi Visual',
+    defaultStartId: 'parkir_belakang',
   },
   {
-    id: 'tamu-maba',
-    name: 'Mahasiswa Baru / Tamu',
-    nim: 'Mode Pencarian Cepat',
+    id: 'maba',
+    name: 'Mahasiswa Baru (Maba)',
+    nim: 'Orientasi Kampus',
+    role: 'maba',
     prodi: 'Umum',
-    prodiLabel: 'Akses Semua Ruangan & MatKul',
-    semester: 1,
-    defaultParkingId: 'parkir-depan',
+    prodiLabel: 'Mahasiswa Baru • Akses Semua Gedung',
+    defaultStartId: 'parkir_depan',
+    isGuest: true,
+  },
+  {
+    id: 'tamu',
+    name: 'Tamu / Pengunjung',
+    nim: 'Mode Pengunjung',
+    role: 'tamu',
+    prodi: 'Umum',
+    prodiLabel: 'Tamu Kampus • Front Office & Layanan',
+    defaultStartId: 'gerbang',
     isGuest: true,
   },
 ];
 
-export const PARKING_SPOTS: ParkingSpot[] = [
+export const START_POINTS: StartPoint[] = [
   {
-    id: 'parkir-depan',
-    nodeId: 'parkir-depan',
-    name: 'Parkiran Motor Depan',
+    id: 'parkir_depan',
+    name: 'Parkir Depan',
+    shortName: 'Parkir Depan (Motor)',
     vehicleType: 'Motor',
-    areaHint: 'Dekat Gerbang Utama Jl. Tukad Pakerisan & Pos Satpam',
-    badgeColor: 'bg-blue-600',
+    x: 92,
+    y: 375,
+    desc: 'Area parkir motor depan dekat Patung Garuda & Gedung 1',
   },
   {
-    id: 'parkir-belakang',
-    nodeId: 'parkir-belakang',
-    name: 'Parkiran Motor Belakang',
+    id: 'parkir_belakang',
+    name: 'Parkir Belakang',
+    shortName: 'Parkir Belakang',
     vehicleType: 'Motor',
-    areaHint: 'Sisi Utara dekat Kantin INSTIKI & Tangga Belakang',
-    badgeColor: 'bg-amber-600',
+    x: 118,
+    y: 38,
+    desc: 'Area parkir belakang dekat Jalan Keluar & Gedung 5',
   },
   {
-    id: 'parkir-mobil',
-    nodeId: 'parkir-mobil',
-    name: 'Parkiran Mobil / Drop-Off',
-    vehicleType: 'Mobil',
-    areaHint: 'Area Timur depan Lobi Utama & Akses Ramah Lift',
-    badgeColor: 'bg-emerald-600',
-  },
-];
-
-export const CAMPUS_NODES: CampusNode[] = [
-  // ==================== LANTAI 1 ====================
-  {
-    id: 'parkir-belakang',
-    label: 'Parkiran Motor Belakang',
-    shortLabel: 'Parkir Belakang',
-    floor: 1,
-    x: 96,
-    y: 52,
-    kind: 'parking',
-    description: 'Area parkir motor sisi utara kampus.',
-    landmark: 'Sebelah Barat Kantin INSTIKI',
-    box: { x: 24, y: 16, w: 144, h: 72 },
-  },
-  {
-    id: 'f1-kantin',
-    label: 'Kantin & Area Santai',
-    shortLabel: 'Kantin',
-    floor: 1,
-    x: 258,
-    y: 52,
-    kind: 'facility',
-    description: 'Area makan & istirahat mahasiswa.',
-    landmark: 'Sisi Utara Kampus',
-    box: { x: 182, y: 16, w: 154, h: 72 },
-  },
-  {
-    id: 'f1-tangga-belakang',
-    label: 'Tangga Belakang (Utara)',
-    shortLabel: 'Tangga Utara',
-    floor: 1,
-    x: 62,
-    y: 140,
-    kind: 'stairs',
-    description: 'Akses tangga sisi utara menuju Lantai 2–4.',
-    landmark: 'Dekat Pintu Masuk Utara',
-    box: { x: 28, y: 116, w: 68, h: 48 },
-  },
-  {
-    id: 'f1-kor-utara',
-    label: 'Koridor Utara Lt. 1',
-    floor: 1,
-    x: 180,
-    y: 140,
-    kind: 'corridor',
-  },
-  {
-    id: 'f1-aula',
-    label: 'Aula INSTIKI',
-    shortLabel: 'Aula Lt. 1',
-    floor: 1,
-    x: 268,
-    y: 148,
-    kind: 'room',
-    description: 'Aula utama untuk seminar, kuliah umum, dan kegiatan mahasiswa.',
-    landmark: 'Sayap Timur Utara Lt. 1',
-    box: { x: 208, y: 114, w: 124, h: 68 },
-  },
-  {
-    id: 'f1-r101',
-    label: 'Ruang R.101',
-    shortLabel: 'R.101',
-    floor: 1,
-    x: 88,
-    y: 210,
-    kind: 'room',
-    description: 'Ruang kuliah teori lantai dasar.',
-    landmark: 'Sebelah Barat Koridor Tengah Lt. 1',
-    box: { x: 28, y: 180, w: 120, h: 58 },
-  },
-  {
-    id: 'f1-kor-tengah',
-    label: 'Koridor Tengah Lt. 1',
-    floor: 1,
-    x: 180,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f1-kor-timur',
-    label: 'Selasar Lift Lt. 1',
-    floor: 1,
-    x: 245,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f1-lift',
-    label: 'Lift Kampus (Lt. 1)',
-    shortLabel: 'Lift',
-    floor: 1,
-    x: 309,
-    y: 210,
-    kind: 'elevator',
-    description: 'Lift aksesibilitas ke Lantai 1–4.',
-    landmark: 'Ujung Koridor Timur',
-    box: { x: 284, y: 192, w: 50, h: 36 },
-  },
-  {
-    id: 'f1-tangga-utama',
-    label: 'Tangga Utama (Selatan)',
-    shortLabel: 'Tangga Utama',
-    floor: 1,
-    x: 68,
-    y: 278,
-    kind: 'stairs',
-    description: 'Tangga utama dekat Lobi Depan menuju Lantai 2–4.',
-    landmark: 'Sebelah Kiri Lobi Utama',
-    box: { x: 28, y: 252, w: 78, h: 52 },
-  },
-  {
-    id: 'f1-lobi',
-    label: 'Lobi Utama & Resepsionis',
-    shortLabel: 'Lobi Utama',
-    floor: 1,
-    x: 180,
-    y: 278,
-    kind: 'facility',
-    description: 'Pintu masuk utama gedung kampus INSTIKI.',
-    landmark: 'Berhadapan langsung dengan Gerbang Utama',
-    box: { x: 128, y: 252, w: 74, h: 52 },
-  },
-  {
-    id: 'f1-baak',
-    label: 'Ruang BAAK & Layanan',
-    shortLabel: 'BAAK',
-    floor: 1,
-    x: 237,
-    y: 272,
-    kind: 'facility',
-    description: 'Administrasi akademik & kemahasiswaan.',
-    landmark: 'Sebelah Kanan Lobi Utama',
-    box: { x: 208, y: 240, w: 58, h: 64 },
-  },
-  {
-    id: 'f1-r102',
-    label: 'Ruang R.102',
-    shortLabel: 'R.102',
-    floor: 1,
-    x: 303,
-    y: 272,
-    kind: 'room',
-    description: 'Ruang kuliah teori lantai 1 sisi timur.',
-    landmark: 'Di samping Ruang BAAK',
-    box: { x: 274, y: 240, w: 58, h: 64 },
-  },
-  {
-    id: 'parkir-depan',
-    label: 'Parkiran Motor Depan',
-    shortLabel: 'Parkir Depan',
-    floor: 1,
-    x: 96,
-    y: 357,
-    kind: 'parking',
-    description: 'Area parkir motor mahasiswa dekat Gerbang Utama.',
-    landmark: 'Jl. Tukad Pakerisan No. 97 (Depan Pos Satpam)',
-    box: { x: 24, y: 326, w: 144, h: 62 },
-  },
-  {
-    id: 'parkir-mobil',
-    label: 'Parkiran Mobil / Drop-Off',
-    shortLabel: 'Parkir Mobil',
-    floor: 1,
-    x: 258,
-    y: 357,
-    kind: 'parking',
-    description: 'Area parkir mobil & drop-off depan lobi.',
-    landmark: 'Sisi Timur Halaman Depan',
-    box: { x: 182, y: 326, w: 154, h: 62 },
-  },
-
-  // ==================== LANTAI 2 ====================
-  {
-    id: 'f2-tangga-belakang',
-    label: 'Tangga Belakang Lt. 2',
-    shortLabel: 'Tangga Utara',
-    floor: 2,
-    x: 62,
-    y: 140,
-    kind: 'stairs',
-    box: { x: 28, y: 116, w: 68, h: 48 },
-  },
-  {
-    id: 'f2-kor-utara',
-    label: 'Koridor Utara Lt. 2',
-    floor: 2,
-    x: 180,
-    y: 140,
-    kind: 'corridor',
-  },
-  {
-    id: 'f2-perpus',
-    label: 'Perpustakaan INSTIKI',
-    shortLabel: 'Perpustakaan',
-    floor: 2,
-    x: 268,
-    y: 148,
-    kind: 'facility',
-    description: 'Ruang baca, koleksi buku, dan area diskusi tenang.',
-    landmark: 'Sayap Timur Utara Lt. 2',
-    box: { x: 208, y: 114, w: 124, h: 68 },
-  },
-  {
-    id: 'f2-lab1',
-    label: 'Lab Komputer 1',
-    shortLabel: 'Lab Kom 1',
-    floor: 2,
-    x: 88,
-    y: 210,
-    kind: 'room',
-    description: 'Laboratorium praktikum pemrograman dasar & algoritma.',
-    landmark: 'Sebelah Barat Koridor Tengah Lt. 2',
-    box: { x: 28, y: 180, w: 120, h: 58 },
-  },
-  {
-    id: 'f2-kor-tengah',
-    label: 'Koridor Tengah Lt. 2',
-    floor: 2,
-    x: 180,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f2-kor-timur1',
-    label: 'Persimpangan Lab 2',
-    floor: 2,
-    x: 237,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f2-kor-timur2',
-    label: 'Selasar Lift Lt. 2',
-    floor: 2,
-    x: 274,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f2-lift',
-    label: 'Lift Kampus (Lt. 2)',
-    shortLabel: 'Lift',
-    floor: 2,
-    x: 309,
-    y: 210,
-    kind: 'elevator',
-    box: { x: 284, y: 192, w: 50, h: 36 },
-  },
-  {
-    id: 'f2-tangga-utama',
-    label: 'Tangga Utama Lt. 2',
-    shortLabel: 'Tangga Utama',
-    floor: 2,
-    x: 68,
-    y: 278,
-    kind: 'stairs',
-    box: { x: 28, y: 252, w: 78, h: 52 },
-  },
-  {
-    id: 'f2-kor-selatan',
-    label: 'Balkon Tengah Lt. 2',
-    floor: 2,
-    x: 180,
-    y: 278,
-    kind: 'corridor',
-  },
-  {
-    id: 'f2-lab2',
-    label: 'Lab Komputer 2',
-    shortLabel: 'Lab Kom 2',
-    floor: 2,
-    x: 237,
-    y: 272,
-    kind: 'room',
-    description: 'Lab praktikum Human Computer Interaction (HCI) & UI/UX.',
-    landmark: 'Tepat di Selatan Koridor Lift Lt. 2',
-    box: { x: 208, y: 240, w: 58, h: 64 },
-  },
-  {
-    id: 'f2-r201',
-    label: 'Ruang R.201',
-    shortLabel: 'R.201',
-    floor: 2,
-    x: 303,
-    y: 272,
-    kind: 'room',
-    description: 'Ruang kuliah teori Lantai 2.',
-    landmark: 'Sebelah Lab Komputer 2',
-    box: { x: 274, y: 240, w: 58, h: 64 },
-  },
-
-  // ==================== LANTAI 3 ====================
-  {
-    id: 'f3-tangga-belakang',
-    label: 'Tangga Belakang Lt. 3',
-    shortLabel: 'Tangga Utara',
-    floor: 3,
-    x: 62,
-    y: 140,
-    kind: 'stairs',
-    box: { x: 28, y: 116, w: 68, h: 48 },
-  },
-  {
-    id: 'f3-kor-utara',
-    label: 'Koridor Utara Lt. 3',
-    floor: 3,
-    x: 180,
-    y: 140,
-    kind: 'corridor',
-  },
-  {
-    id: 'f3-lab-dkv',
-    label: 'Lab Desain & DKV',
-    shortLabel: 'Lab DKV',
-    floor: 3,
-    x: 268,
-    y: 148,
-    kind: 'room',
-    description: 'Studio iMac & desain grafis untuk mahasiswa DKV.',
-    landmark: 'Sayap Timur Utara Lt. 3',
-    box: { x: 208, y: 114, w: 124, h: 68 },
-  },
-  {
-    id: 'f3-lab-jar',
-    label: 'Lab Jaringan & Cloud',
-    shortLabel: 'Lab Jaringan',
-    floor: 3,
-    x: 88,
-    y: 210,
-    kind: 'room',
-    description: 'Laboratorium jaringan komputer, server & keamanan siber.',
-    landmark: 'Sebelah Barat Koridor Tengah Lt. 3',
-    box: { x: 28, y: 180, w: 120, h: 58 },
-  },
-  {
-    id: 'f3-kor-tengah',
-    label: 'Koridor Tengah Lt. 3',
-    floor: 3,
-    x: 180,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f3-kor-timur1',
-    label: 'Persimpangan R.301',
-    floor: 3,
-    x: 237,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f3-kor-timur2',
-    label: 'Selasar Lift Lt. 3',
-    floor: 3,
-    x: 274,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f3-lift',
-    label: 'Lift Kampus (Lt. 3)',
-    shortLabel: 'Lift',
-    floor: 3,
-    x: 309,
-    y: 210,
-    kind: 'elevator',
-    box: { x: 284, y: 192, w: 50, h: 36 },
-  },
-  {
-    id: 'f3-tangga-utama',
-    label: 'Tangga Utama Lt. 3',
-    shortLabel: 'Tangga Utama',
-    floor: 3,
-    x: 68,
-    y: 278,
-    kind: 'stairs',
-    box: { x: 28, y: 252, w: 78, h: 52 },
-  },
-  {
-    id: 'f3-kor-selatan',
-    label: 'Koridor Selatan Lt. 3',
-    floor: 3,
-    x: 180,
-    y: 278,
-    kind: 'corridor',
-  },
-  {
-    id: 'f3-r301',
-    label: 'Ruang R.301',
-    shortLabel: 'R.301',
-    floor: 3,
-    x: 237,
-    y: 272,
-    kind: 'room',
-    description: 'Ruang kuliah teori Lantai 3.',
-    landmark: 'Sebelah Barat R.302',
-    box: { x: 208, y: 240, w: 58, h: 64 },
-  },
-  {
-    id: 'f3-r302',
-    label: 'Ruang R.302',
-    shortLabel: 'R.302',
-    floor: 3,
-    x: 303,
-    y: 272,
-    kind: 'room',
-    description: 'Ruang kuliah teori & presentasi Lantai 3.',
-    landmark: 'Ujung Selatan Timur Lt. 3',
-    box: { x: 274, y: 240, w: 58, h: 64 },
-  },
-
-  // ==================== LANTAI 4 ====================
-  {
-    id: 'f4-tangga-belakang',
-    label: 'Tangga Belakang Lt. 4',
-    shortLabel: 'Tangga Utara',
-    floor: 4,
-    x: 62,
-    y: 140,
-    kind: 'stairs',
-    box: { x: 28, y: 116, w: 68, h: 48 },
-  },
-  {
-    id: 'f4-kor-utara',
-    label: 'Koridor Utara Lt. 4',
-    floor: 4,
-    x: 180,
-    y: 140,
-    kind: 'corridor',
-  },
-  {
-    id: 'f4-smart403',
-    label: 'Smart Classroom 403',
-    shortLabel: 'Smart 403',
-    floor: 4,
-    x: 268,
-    y: 148,
-    kind: 'room',
-    description: 'Ruang kuliah interaktif dengan smartboard & AC sentral.',
-    landmark: 'Sayap Timur Utara Lt. 4',
-    box: { x: 208, y: 114, w: 124, h: 68 },
-  },
-  {
-    id: 'f4-r401',
-    label: 'Ruang R.401',
-    shortLabel: 'R.401',
-    floor: 4,
-    x: 88,
-    y: 210,
-    kind: 'room',
-    description: 'Ruang kuliah teori Lantai 4.',
-    landmark: 'Sayap Barat Lt. 4',
-    box: { x: 28, y: 180, w: 120, h: 58 },
-  },
-  {
-    id: 'f4-kor-tengah',
-    label: 'Koridor Tengah Lt. 4',
-    floor: 4,
-    x: 180,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f4-kor-timur1',
-    label: 'Persimpangan R.402',
-    floor: 4,
-    x: 237,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f4-kor-timur2',
-    label: 'Selasar Lift Lt. 4',
-    floor: 4,
-    x: 274,
-    y: 210,
-    kind: 'corridor',
-  },
-  {
-    id: 'f4-lift',
-    label: 'Lift Kampus (Lt. 4)',
-    shortLabel: 'Lift',
-    floor: 4,
-    x: 309,
-    y: 210,
-    kind: 'elevator',
-    box: { x: 284, y: 192, w: 50, h: 36 },
-  },
-  {
-    id: 'f4-tangga-utama',
-    label: 'Tangga Utama Lt. 4',
-    shortLabel: 'Tangga Utama',
-    floor: 4,
-    x: 68,
-    y: 278,
-    kind: 'stairs',
-    box: { x: 28, y: 252, w: 78, h: 52 },
-  },
-  {
-    id: 'f4-kor-selatan',
-    label: 'Koridor Selatan Lt. 4',
-    floor: 4,
-    x: 180,
-    y: 278,
-    kind: 'corridor',
-  },
-  {
-    id: 'f4-r402',
-    label: 'Ruang R.402',
-    shortLabel: 'R.402',
-    floor: 4,
-    x: 237,
-    y: 272,
-    kind: 'room',
-    description: 'Ruang kuliah teori Lantai 4.',
-    landmark: 'Sebelah Barat R.404',
-    box: { x: 208, y: 240, w: 58, h: 64 },
-  },
-  {
-    id: 'f4-r404',
-    label: 'Ruang R.404',
-    shortLabel: 'R.404',
-    floor: 4,
-    x: 303,
-    y: 272,
-    kind: 'room',
-    description: 'Ruang kuliah & seminar Lantai 4.',
-    landmark: 'Ujung Selatan Timur Lt. 4',
-    box: { x: 274, y: 240, w: 58, h: 64 },
+    id: 'gerbang',
+    name: 'Gerbang / Garuda',
+    shortName: 'Patung Garuda (Masuk)',
+    vehicleType: 'Pejalan Kaki',
+    x: 120,
+    y: 418,
+    desc: 'Titik kedatangan di gerbang utama Jl. Tukad Pakerisan No. 97',
   },
 ];
 
-export const CAMPUS_EDGES: CampusEdge[] = [
-  // ==================== LANTAI 1 ====================
+export const BUILDINGS: BuildingInfo[] = [
   {
-    from: 'parkir-depan',
-    to: 'f1-lobi',
-    distanceMeters: 35,
-    instructionForward: 'Dari Parkiran Motor Depan, jalan menuju Gerbang & masuk ke Lobi Utama.',
-    instructionBackward: 'Keluar dari Lobi Utama menuju Parkiran Motor Depan.',
-    landmarkHint: 'Lewati Pos Satpam di sebelah kiri',
+    id: 'G1',
+    name: 'Gedung 1',
+    subtitle: 'Pusat Layanan, Perpustakaan & Lab A–C',
+    quickTag: 'Front Office',
+    x: 68,
+    y: 312,
+    w: 62,
+    h: 46,
+    color: '#be123c',
+    floors: [
+      {
+        floor: 1,
+        label: 'Lantai 1 (11x)',
+        rooms: [
+          {
+            code: 'FRONT OFFICE',
+            name: 'Front Office',
+            cat: 'Layanan & Info',
+            desc: 'Pusat informasi utama & layanan tamu di Gedung 1 Lantai 1.',
+          },
+          {
+            code: 'ADM. KEUANGAN',
+            name: 'Administrasi Keuangan',
+            cat: 'Layanan & Info',
+            desc: 'Loket pembayaran UKT & administrasi keuangan mahasiswa.',
+          },
+          {
+            code: 'R.111',
+            name: 'Lab MCL (R.111)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Multimedia & Creative Learning.',
+          },
+          {
+            code: 'R.112',
+            name: 'Lab A (R.112)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer A untuk praktikum pemrograman.',
+          },
+          {
+            code: 'R.113',
+            name: 'Lab B (R.113)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer B.',
+          },
+        ],
+      },
+      {
+        floor: 2,
+        label: 'Lantai 2 (12x)',
+        rooms: [
+          {
+            code: 'R.121',
+            name: 'Ruang BK (R.121)',
+            cat: 'Layanan & Info',
+            desc: 'Ruang Bimbingan Konseling mahasiswa.',
+          },
+          {
+            code: 'R.122',
+            name: 'Ruang Kelas 122',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang perkuliahan teori Gedung 1 Lt. 2 (122–124).',
+          },
+          {
+            code: 'R.123',
+            name: 'Ruang Kelas 123',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang perkuliahan teori Gedung 1 Lt. 2.',
+          },
+          {
+            code: 'R.124',
+            name: 'Ruang Kelas 124',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang perkuliahan teori Gedung 1 Lt. 2.',
+          },
+          {
+            code: 'R.125',
+            name: 'Lab C (R.125)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer C.',
+          },
+        ],
+      },
+      {
+        floor: 3,
+        label: 'Lantai 3 (13x)',
+        rooms: [
+          {
+            code: 'R.131',
+            name: 'Lab Legasi (R.131)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Riset & Legasi.',
+          },
+          {
+            code: 'R.132',
+            name: 'Perpustakaan (R.132)',
+            cat: 'Fasilitas',
+            desc: 'Perpustakaan Kampus INSTIKI & ruang baca.',
+          },
+        ],
+      },
+    ],
   },
   {
-    from: 'parkir-mobil',
-    to: 'f1-lobi',
-    distanceMeters: 32,
-    instructionForward: 'Dari Parkiran Mobil, jalan ke arah Lobi Utama melewati area drop-off.',
-    instructionBackward: 'Keluar dari Lobi Utama menuju Parkiran Mobil di sisi timur.',
-    landmarkHint: 'Pintu kaca utama Lobi Kampus',
+    id: 'G2',
+    name: 'Gedung 2',
+    subtitle: 'BAAK, Prodi, Dekanat, Aula & Rooftop',
+    quickTag: 'R. BAAK & Prodi',
+    x: 68,
+    y: 252,
+    w: 62,
+    h: 46,
+    color: '#0369a1',
+    floors: [
+      {
+        floor: 1,
+        label: 'Lantai 1 (21x)',
+        rooms: [
+          {
+            code: 'R.212',
+            name: 'R. WR. III (212)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Wakil Rektor III Bidang Kemahasiswaan.',
+          },
+          {
+            code: 'R.213',
+            name: 'R. BAAK / BAKK (213)',
+            cat: 'Layanan & Info',
+            desc: 'Biro Administrasi Akademik & Kemahasiswaan (Pusat Informasi).',
+          },
+          {
+            code: 'R.214',
+            name: 'R. Prodi (214)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Program Studi (TI, SK, DKV, Bisnis Digital).',
+          },
+          {
+            code: 'R.215',
+            name: 'R. Dekan (215)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Dekan Fakultas.',
+          },
+          {
+            code: 'R.218',
+            name: 'R. WR. I (218)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Wakil Rektor I Bidang Akademik.',
+          },
+        ],
+      },
+      {
+        floor: 2,
+        label: 'Lantai 2 (22x)',
+        rooms: [
+          {
+            code: 'R.221',
+            name: 'R. Transit Dosen & Lab D (221)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Transit Dosen & Laboratorium D.',
+          },
+          {
+            code: 'R.222',
+            name: 'Lab DPM (222)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium DPM.',
+          },
+          {
+            code: 'R.223-224',
+            name: 'Lab Sertifikasi (223, 224)',
+            cat: 'Laboratorium',
+            desc: 'Ruang uji kompetensi & sertifikasi profesi.',
+          },
+          {
+            code: 'R.225',
+            name: 'R. Marketing (225)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Marketing & Admisi.',
+          },
+        ],
+      },
+      {
+        floor: 3,
+        label: 'Lantai 3 (23x)',
+        rooms: [
+          {
+            code: 'R.231',
+            name: 'Aula INSTIKI (231)',
+            cat: 'Fasilitas',
+            desc: 'Aula utama untuk seminar, yudisium, dan acara kampus.',
+          },
+          {
+            code: 'R.221-241',
+            name: 'R. Kelas (221–241)',
+            cat: 'Ruang Kelas',
+            desc: 'Deretan ruang kelas Gedung 2.',
+          },
+        ],
+      },
+      {
+        floor: 4,
+        label: 'Rooftop / Lt. 4 (24x)',
+        rooms: [
+          {
+            code: 'R.241',
+            name: 'Rooftop & Area Ibadah (241)',
+            cat: 'Area Ibadah',
+            desc: 'Pura / Area Ibadah di Rooftop Gedung 2.',
+          },
+        ],
+      },
+    ],
   },
   {
-    from: 'parkir-belakang',
-    to: 'f1-tangga-belakang',
-    distanceMeters: 28,
-    instructionForward: 'Dari Parkiran Motor Belakang, masuk lewat pintu sisi utara langsung ke area Tangga Belakang.',
-    instructionBackward: 'Turun dan keluar lewat pintu utara menuju Parkiran Motor Belakang.',
-    landmarkHint: 'Sebelah Kantin INSTIKI',
+    id: 'G3',
+    name: 'Gedung 3',
+    subtitle: 'Rektorat, Ruang Dosen, Studio & Kelas',
+    quickTag: 'R. Dosen & Rektor',
+    x: 68,
+    y: 192,
+    w: 62,
+    h: 46,
+    color: '#4338ca',
+    floors: [
+      {
+        floor: 1,
+        label: 'Lantai 1 (31x)',
+        rooms: [
+          {
+            code: 'R.311',
+            name: 'R. Rektor (311)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Rektor INSTIKI.',
+          },
+          {
+            code: 'R.312',
+            name: 'R. Rapat I (312)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Rapat Pimpinan I.',
+          },
+          {
+            code: 'R.313',
+            name: 'R. Dosen (313)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Dosen Utama untuk bimbingan & konsultasi.',
+          },
+          {
+            code: 'R.314',
+            name: 'R. WR IV (314)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Wakil Rektor IV.',
+          },
+          {
+            code: 'R.315',
+            name: 'R. Rapat II (315)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Rapat II.',
+          },
+          {
+            code: 'R.316',
+            name: 'R. WR II (316)',
+            cat: 'Pimpinan & Kantor',
+            desc: 'Ruang Wakil Rektor II.',
+          },
+          {
+            code: 'R.317',
+            name: 'R. Teknisi (317)',
+            cat: 'Layanan & Info',
+            desc: 'Ruang Teknisi IT & Pemeliharaan.',
+          },
+        ],
+      },
+      {
+        floor: 2,
+        label: 'Lantai 2 (32x)',
+        rooms: [
+          {
+            code: 'R.321',
+            name: 'R. Studio I (321)',
+            cat: 'Laboratorium',
+            desc: 'Studio Desain / Multimedia I.',
+          },
+          {
+            code: 'R.322',
+            name: 'R. Studio II (322)',
+            cat: 'Laboratorium',
+            desc: 'Studio Desain / Multimedia II.',
+          },
+          {
+            code: 'PAMERAN',
+            name: 'Area Pameran',
+            cat: 'Fasilitas',
+            desc: 'Area pameran karya mahasiswa.',
+          },
+          {
+            code: 'R.323-329',
+            name: 'R. Kelas (323–329)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang perkuliahan Gedung 3 Lantai 2.',
+          },
+        ],
+      },
+      {
+        floor: 3,
+        label: 'Lantai 3 (33x)',
+        rooms: [
+          {
+            code: 'R.331-339',
+            name: 'R. Kelas (331–339)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang perkuliahan Gedung 3 Lantai 3.',
+          },
+        ],
+      },
+      {
+        floor: 4,
+        label: 'Lantai 4 (34x)',
+        rooms: [
+          {
+            code: 'R.341-344',
+            name: 'R. Kelas (341–344)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang perkuliahan Gedung 3 Lantai 4.',
+          },
+        ],
+      },
+    ],
   },
   {
-    from: 'f1-kantin',
-    to: 'f1-kor-utara',
-    distanceMeters: 24,
-    instructionForward: 'Dari Kantin, masuk ke Koridor Utara Lantai 1.',
-    instructionBackward: 'Jalan lurus keluar utara menuju area Kantin INSTIKI.',
-    landmarkHint: 'Pintu penghubung Kantin – Gedung Utama',
+    id: 'G6',
+    name: 'Gedung 6',
+    subtitle: 'Cafetaria, Lab Android, Lab H & Lab I',
+    quickTag: 'Lab H & Lab I',
+    x: 68,
+    y: 128,
+    w: 62,
+    h: 48,
+    color: '#0f766e',
+    floors: [
+      {
+        floor: 1,
+        label: 'Lantai 1 (61x)',
+        rooms: [
+          {
+            code: 'KANTIN-G6',
+            name: 'Kantin / Cafetaria Gedung 6',
+            cat: 'Fasilitas',
+            desc: 'Area kantin & cafetaria di lantai dasar Gedung 6.',
+          },
+          {
+            code: 'R.611-614',
+            name: 'R. Kelas Dasar (61x)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas lantai dasar Gedung 6.',
+          },
+        ],
+      },
+      {
+        floor: 2,
+        label: 'Lantai 2 (62x)',
+        rooms: [
+          {
+            code: 'R.621',
+            name: 'Lab Android (621)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Pemrograman Mobile & Android.',
+          },
+          {
+            code: 'R.623',
+            name: 'Lab H (623)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer H.',
+          },
+          {
+            code: 'R.622-624',
+            name: 'R. Kelas (621–624)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 6 Lantai 2.',
+          },
+        ],
+      },
+      {
+        floor: 3,
+        label: 'Lantai 3 (63x)',
+        rooms: [
+          {
+            code: 'R.632',
+            name: 'Lab I (632)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer I.',
+          },
+          {
+            code: 'R.631',
+            name: 'R. Kelas (631)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 6 Lantai 3.',
+          },
+        ],
+      },
+    ],
   },
   {
-    from: 'f1-tangga-belakang',
-    to: 'f1-kor-utara',
-    distanceMeters: 18,
-    instructionForward: 'Jalan ke arah timur menyusuri Koridor Utara Lt. 1.',
-    instructionBackward: 'Jalan ke arah barat menuju Tangga Belakang Lt. 1.',
+    id: 'G5',
+    name: 'Gedung 5',
+    subtitle: 'Lab G, Lab Jaringan, Lab DKV & R. Gym',
+    quickTag: 'Lab DKV & Jaringan',
+    x: 68,
+    y: 66,
+    w: 62,
+    h: 48,
+    color: '#b45309',
+    floors: [
+      {
+        floor: 1,
+        label: 'Lantai 1 (51x)',
+        rooms: [
+          {
+            code: 'R.511-514',
+            name: 'R. Kelas (511–514)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 5 Lantai 1.',
+          },
+        ],
+      },
+      {
+        floor: 2,
+        label: 'Lantai 2 (52x)',
+        rooms: [
+          {
+            code: 'R.524',
+            name: 'Lab G (524)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer G.',
+          },
+          {
+            code: 'R.521-523',
+            name: 'R. Kelas (521–523)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 5 Lantai 2.',
+          },
+        ],
+      },
+      {
+        floor: 3,
+        label: 'Lantai 3 (53x)',
+        rooms: [
+          {
+            code: 'R.534',
+            name: 'Lab Jaringan (534)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Jaringan Komputer & Infrastruktur.',
+          },
+          {
+            code: 'R.531-533',
+            name: 'R. Kelas (531–533)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 5 Lantai 3.',
+          },
+        ],
+      },
+      {
+        floor: 4,
+        label: 'Lantai 4 (54x)',
+        rooms: [
+          {
+            code: 'R.541',
+            name: 'Lab DKV (541)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Desain Komunikasi Visual.',
+          },
+          {
+            code: 'R.542',
+            name: 'R. Kelas (542)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 5 Lantai 4.',
+          },
+        ],
+      },
+      {
+        floor: 5,
+        label: 'Lantai 5 (55x)',
+        rooms: [
+          {
+            code: 'R.551',
+            name: 'R. Gym (551)',
+            cat: 'Fasilitas',
+            desc: 'Fasilitas kebugaran / Gym mahasiswa di Lantai 5.',
+          },
+        ],
+      },
+    ],
   },
   {
-    from: 'f1-kor-utara',
-    to: 'f1-aula',
-    distanceMeters: 16,
-    instructionForward: 'Belok ke pintu besar di sisi timur untuk masuk ke Aula INSTIKI.',
-    instructionBackward: 'Keluar dari Aula INSTIKI menuju Koridor Utara Lt. 1.',
-    landmarkHint: 'Pintu ganda Aula di sebelah kanan',
-  },
-  {
-    from: 'f1-kor-utara',
-    to: 'f1-kor-tengah',
-    distanceMeters: 16,
-    instructionForward: 'Lanjutkan jalan lurus ke selatan di Koridor Utama Lt. 1.',
-    instructionBackward: 'Jalan lurus ke utara menyusuri Koridor Utama Lt. 1.',
-  },
-  {
-    from: 'f1-kor-tengah',
-    to: 'f1-r101',
-    distanceMeters: 16,
-    instructionForward: 'Masuk ke pintu sisi barat menuju Ruang R.101.',
-    instructionBackward: 'Keluar dari Ruang R.101 kembali ke Koridor Tengah Lt. 1.',
-    landmarkHint: 'Papan nama R.101 di sebelah pintu',
-  },
-  {
-    from: 'f1-kor-tengah',
-    to: 'f1-kor-timur',
-    distanceMeters: 14,
-    instructionForward: 'Belok menuju selasar timur ke arah Lift Kampus.',
-    instructionBackward: 'Jalan kembali ke arah Koridor Tengah Lt. 1.',
-  },
-  {
-    from: 'f1-kor-timur',
-    to: 'f1-lift',
-    distanceMeters: 12,
-    instructionForward: 'Jalan terus ke ujung selasar timur menuju pintu Lift Kampus.',
-    instructionBackward: 'Keluar dari area Lift ke arah Koridor Tengah Lt. 1.',
-    landmarkHint: 'Tombol panggil Lift di sisi kanan',
-  },
-  {
-    from: 'f1-kor-tengah',
-    to: 'f1-lobi',
-    distanceMeters: 16,
-    instructionForward: 'Lurus ke arah Lobi Utama Lantai 1.',
-    instructionBackward: 'Dari Lobi Utama, jalan lurus masuk ke Koridor Tengah Lt. 1.',
-    landmarkHint: 'Meja Resepsionis berada di area Lobi',
-  },
-  {
-    from: 'f1-lobi',
-    to: 'f1-tangga-utama',
-    distanceMeters: 18,
-    instructionForward: 'Dari Lobi Utama, belok ke sisi barat menuju Tangga Utama.',
-    instructionBackward: 'Dari area Tangga Utama, jalan ke timur menuju Lobi Utama.',
-    landmarkHint: 'Area Tangga Utama bersebelahan dengan Lobi',
-  },
-  {
-    from: 'f1-kor-timur',
-    to: 'f1-baak',
-    distanceMeters: 12,
-    instructionForward: 'Masuk ke Ruang BAAK & Layanan Mahasiswa di sisi selatan selasar.',
-    instructionBackward: 'Keluar dari Ruang BAAK ke Selasar Timur Lt. 1.',
-    landmarkHint: 'Loket Pelayanan BAAK',
-  },
-  {
-    from: 'f1-kor-timur',
-    to: 'f1-r102',
-    distanceMeters: 16,
-    instructionForward: 'Jalan sedikit ke timur lalu belok kanan masuk Ruang R.102.',
-    instructionBackward: 'Keluar dari Ruang R.102 menuju Selasar Timur Lt. 1.',
-    landmarkHint: 'Sebelah timur Ruang BAAK',
-  },
-
-  // ==================== LANTAI 2 ====================
-  {
-    from: 'f2-tangga-belakang',
-    to: 'f2-kor-utara',
-    distanceMeters: 18,
-    instructionForward: 'Dari Tangga Belakang Lt. 2, jalan ke timur menuju Koridor Utara.',
-    instructionBackward: 'Jalan ke barat menuju Tangga Belakang Lt. 2.',
-  },
-  {
-    from: 'f2-kor-utara',
-    to: 'f2-perpus',
-    distanceMeters: 16,
-    instructionForward: 'Masuk ke pintu kaca sisi timur menuju Perpustakaan INSTIKI.',
-    instructionBackward: 'Keluar dari Perpustakaan menuju Koridor Utara Lt. 2.',
-    landmarkHint: 'Rak penitipan tas di depan Perpustakaan',
-  },
-  {
-    from: 'f2-kor-utara',
-    to: 'f2-kor-tengah',
-    distanceMeters: 16,
-    instructionForward: 'Jalan lurus ke selatan di Koridor Utama Lt. 2.',
-    instructionBackward: 'Jalan lurus ke utara di Koridor Utama Lt. 2.',
-  },
-  {
-    from: 'f2-kor-tengah',
-    to: 'f2-lab1',
-    distanceMeters: 16,
-    instructionForward: 'Belok ke sisi barat untuk masuk ke Lab Komputer 1.',
-    instructionBackward: 'Keluar dari Lab Komputer 1 ke Koridor Tengah Lt. 2.',
-    landmarkHint: 'Pintu bertanda "LAB KOMPUTER 1"',
-  },
-  {
-    from: 'f2-kor-tengah',
-    to: 'f2-kor-timur1',
-    distanceMeters: 12,
-    instructionForward: 'Belok ke koridor sayap timur Lantai 2.',
-    instructionBackward: 'Jalan ke barat kembali ke Koridor Tengah Lt. 2.',
-  },
-  {
-    from: 'f2-kor-timur1',
-    to: 'f2-lab2',
-    distanceMeters: 12,
-    instructionForward: 'Belok kanan masuk ke Lab Komputer 2 (Kelas HCI).',
-    instructionBackward: 'Keluar dari Lab Komputer 2 ke koridor timur Lt. 2.',
-    landmarkHint: 'Pintu bertanda "LAB KOMPUTER 2"',
-  },
-  {
-    from: 'f2-kor-timur1',
-    to: 'f2-kor-timur2',
-    distanceMeters: 8,
-    instructionForward: 'Lanjutkan jalan ke ujung koridor timur.',
-    instructionBackward: 'Jalan ke barat melewati depan Lab Komputer 2.',
-  },
-  {
-    from: 'f2-kor-timur2',
-    to: 'f2-r201',
-    distanceMeters: 12,
-    instructionForward: 'Belok kanan masuk ke Ruang R.201.',
-    instructionBackward: 'Keluar dari Ruang R.201 ke selasar timur Lt. 2.',
-    landmarkHint: 'Di samping Lab Komputer 2',
-  },
-  {
-    from: 'f2-kor-timur2',
-    to: 'f2-lift',
-    distanceMeters: 8,
-    instructionForward: 'Masuk ke area Lift Kampus di ujung selasar timur Lt. 2.',
-    instructionBackward: 'Keluar dari Lift Lt. 2 menuju selasar sayap timur.',
-    landmarkHint: 'Cermin & papan penunjuk Lantai 2 di depan Lift',
-  },
-  {
-    from: 'f2-kor-tengah',
-    to: 'f2-kor-selatan',
-    distanceMeters: 16,
-    instructionForward: 'Jalan lurus ke selatan menuju area Balkon & Tangga Utama Lt. 2.',
-    instructionBackward: 'Dari area Tangga Utama Lt. 2, jalan ke utara menuju Koridor Tengah.',
-  },
-  {
-    from: 'f2-tangga-utama',
-    to: 'f2-kor-selatan',
-    distanceMeters: 18,
-    instructionForward: 'Dari Tangga Utama Lt. 2, jalan ke timur menuju Koridor Selatan.',
-    instructionBackward: 'Jalan ke barat menuju Tangga Utama Lt. 2.',
-  },
-
-  // ==================== LANTAI 3 ====================
-  {
-    from: 'f3-tangga-belakang',
-    to: 'f3-kor-utara',
-    distanceMeters: 18,
-    instructionForward: 'Dari Tangga Belakang Lt. 3, jalan ke timur menuju Koridor Utara.',
-    instructionBackward: 'Jalan ke barat menuju Tangga Belakang Lt. 3.',
-  },
-  {
-    from: 'f3-kor-utara',
-    to: 'f3-lab-dkv',
-    distanceMeters: 16,
-    instructionForward: 'Masuk ke pintu sisi timur menuju Lab Desain & DKV.',
-    instructionBackward: 'Keluar dari Lab DKV menuju Koridor Utara Lt. 3.',
-    landmarkHint: 'Display karya desain mahasiswa di depan lab',
-  },
-  {
-    from: 'f3-kor-utara',
-    to: 'f3-kor-tengah',
-    distanceMeters: 16,
-    instructionForward: 'Jalan lurus ke selatan di Koridor Utama Lt. 3.',
-    instructionBackward: 'Jalan lurus ke utara di Koridor Utama Lt. 3.',
-  },
-  {
-    from: 'f3-kor-tengah',
-    to: 'f3-lab-jar',
-    distanceMeters: 16,
-    instructionForward: 'Belok ke sisi barat masuk ke Lab Jaringan & Cloud.',
-    instructionBackward: 'Keluar dari Lab Jaringan ke Koridor Tengah Lt. 3.',
-    landmarkHint: 'Pintu bertanda "LAB JARINGAN"',
-  },
-  {
-    from: 'f3-kor-tengah',
-    to: 'f3-kor-timur1',
-    distanceMeters: 12,
-    instructionForward: 'Belok ke koridor sayap timur Lantai 3.',
-    instructionBackward: 'Jalan ke barat kembali ke Koridor Tengah Lt. 3.',
-  },
-  {
-    from: 'f3-kor-timur1',
-    to: 'f3-r301',
-    distanceMeters: 12,
-    instructionForward: 'Belok kanan masuk ke Ruang R.301.',
-    instructionBackward: 'Keluar dari Ruang R.301 ke koridor timur Lt. 3.',
-    landmarkHint: 'Papan nomor ruang R.301',
-  },
-  {
-    from: 'f3-kor-timur1',
-    to: 'f3-kor-timur2',
-    distanceMeters: 8,
-    instructionForward: 'Lanjutkan jalan ke ujung koridor timur Lt. 3.',
-    instructionBackward: 'Jalan ke barat melewati depan Ruang R.301.',
-  },
-  {
-    from: 'f3-kor-timur2',
-    to: 'f3-r302',
-    distanceMeters: 12,
-    instructionForward: 'Belok kanan masuk ke Ruang R.302.',
-    instructionBackward: 'Keluar dari Ruang R.302 ke selasar timur Lt. 3.',
-    landmarkHint: 'Ruang R.302 di ujung timur selatan',
-  },
-  {
-    from: 'f3-kor-timur2',
-    to: 'f3-lift',
-    distanceMeters: 8,
-    instructionForward: 'Masuk ke area Lift Kampus di ujung selasar timur Lt. 3.',
-    instructionBackward: 'Keluar dari Lift Lt. 3 menuju koridor sayap timur.',
-    landmarkHint: 'Penunjuk arah ruangan Lt. 3 di depan Lift',
-  },
-  {
-    from: 'f3-kor-tengah',
-    to: 'f3-kor-selatan',
-    distanceMeters: 16,
-    instructionForward: 'Jalan lurus ke selatan menuju area Tangga Utama Lt. 3.',
-    instructionBackward: 'Jalan lurus ke utara menuju Koridor Tengah Lt. 3.',
-  },
-  {
-    from: 'f3-tangga-utama',
-    to: 'f3-kor-selatan',
-    distanceMeters: 18,
-    instructionForward: 'Dari Tangga Utama Lt. 3, jalan ke timur menuju Koridor Selatan.',
-    instructionBackward: 'Jalan ke barat menuju Tangga Utama Lt. 3.',
-  },
-
-  // ==================== LANTAI 4 ====================
-  {
-    from: 'f4-tangga-belakang',
-    to: 'f4-kor-utara',
-    distanceMeters: 18,
-    instructionForward: 'Dari Tangga Belakang Lt. 4, jalan ke timur menuju Koridor Utara.',
-    instructionBackward: 'Jalan ke barat menuju Tangga Belakang Lt. 4.',
-  },
-  {
-    from: 'f4-kor-utara',
-    to: 'f4-smart403',
-    distanceMeters: 16,
-    instructionForward: 'Masuk ke pintu sisi timur menuju Smart Classroom 403.',
-    instructionBackward: 'Keluar dari Smart Classroom 403 ke Koridor Utara Lt. 4.',
-    landmarkHint: 'Pintu kaca ganda bertanda "SMART CLASS 403"',
-  },
-  {
-    from: 'f4-kor-utara',
-    to: 'f4-kor-tengah',
-    distanceMeters: 16,
-    instructionForward: 'Jalan lurus ke selatan di Koridor Utama Lt. 4.',
-    instructionBackward: 'Jalan lurus ke utara di Koridor Utama Lt. 4.',
-  },
-  {
-    from: 'f4-kor-tengah',
-    to: 'f4-r401',
-    distanceMeters: 16,
-    instructionForward: 'Belok ke sisi barat masuk ke Ruang R.401.',
-    instructionBackward: 'Keluar dari Ruang R.401 ke Koridor Tengah Lt. 4.',
-    landmarkHint: 'Papan nomor ruang R.401',
-  },
-  {
-    from: 'f4-kor-tengah',
-    to: 'f4-kor-timur1',
-    distanceMeters: 12,
-    instructionForward: 'Belok ke koridor sayap timur Lantai 4.',
-    instructionBackward: 'Jalan ke barat kembali ke Koridor Tengah Lt. 4.',
-  },
-  {
-    from: 'f4-kor-timur1',
-    to: 'f4-r402',
-    distanceMeters: 12,
-    instructionForward: 'Belok kanan masuk ke Ruang R.402.',
-    instructionBackward: 'Keluar dari Ruang R.402 ke koridor timur Lt. 4.',
-    landmarkHint: 'Papan nomor ruang R.402',
-  },
-  {
-    from: 'f4-kor-timur1',
-    to: 'f4-kor-timur2',
-    distanceMeters: 8,
-    instructionForward: 'Lanjutkan jalan ke ujung koridor timur Lt. 4.',
-    instructionBackward: 'Jalan ke barat melewati depan Ruang R.402.',
-  },
-  {
-    from: 'f4-kor-timur2',
-    to: 'f4-r404',
-    distanceMeters: 12,
-    instructionForward: 'Belok kanan masuk ke Ruang R.404.',
-    instructionBackward: 'Keluar dari Ruang R.404 ke selasar timur Lt. 4.',
-    landmarkHint: 'Ujung timur selatan Lantai 4',
-  },
-  {
-    from: 'f4-kor-timur2',
-    to: 'f4-lift',
-    distanceMeters: 8,
-    instructionForward: 'Masuk ke area Lift Kampus di ujung selasar timur Lt. 4.',
-    instructionBackward: 'Keluar dari Lift Lt. 4 menuju koridor sayap timur.',
-    landmarkHint: 'Lobi Lift Lantai 4',
-  },
-  {
-    from: 'f4-kor-tengah',
-    to: 'f4-kor-selatan',
-    distanceMeters: 16,
-    instructionForward: 'Jalan lurus ke selatan menuju area Tangga Utama Lt. 4.',
-    instructionBackward: 'Jalan lurus ke utara menuju Koridor Tengah Lt. 4.',
-  },
-  {
-    from: 'f4-tangga-utama',
-    to: 'f4-kor-selatan',
-    distanceMeters: 18,
-    instructionForward: 'Dari Tangga Utama Lt. 4, jalan ke timur menuju Koridor Selatan.',
-    instructionBackward: 'Jalan ke barat menuju Tangga Utama Lt. 4.',
-  },
-
-  // ==================== TRANSISI ANTAR LANTAI ====================
-  // Tangga Utama (Lt 1 <-> 2 <-> 3 <-> 4)
-  {
-    from: 'f1-tangga-utama',
-    to: 'f2-tangga-utama',
-    distanceMeters: 18,
-    isStairs: true,
-    instructionForward: 'Naik Tangga Utama dari Lantai 1 ke Lantai 2.',
-    instructionBackward: 'Turun Tangga Utama dari Lantai 2 ke Lantai 1.',
-    landmarkHint: 'Pegangan tangga & penunjuk nomor Lantai 2 di dinding',
-  },
-  {
-    from: 'f2-tangga-utama',
-    to: 'f3-tangga-utama',
-    distanceMeters: 18,
-    isStairs: true,
-    instructionForward: 'Naik Tangga Utama dari Lantai 2 ke Lantai 3.',
-    instructionBackward: 'Turun Tangga Utama dari Lantai 3 ke Lantai 2.',
-    landmarkHint: 'Penunjuk Lantai 3 di bordes tangga',
-  },
-  {
-    from: 'f3-tangga-utama',
-    to: 'f4-tangga-utama',
-    distanceMeters: 18,
-    isStairs: true,
-    instructionForward: 'Naik Tangga Utama dari Lantai 3 ke Lantai 4.',
-    instructionBackward: 'Turun Tangga Utama dari Lantai 4 ke Lantai 3.',
-    landmarkHint: 'Penunjuk Lantai 4 di lantai teratas',
-  },
-
-  // Tangga Belakang (Lt 1 <-> 2 <-> 3 <-> 4)
-  {
-    from: 'f1-tangga-belakang',
-    to: 'f2-tangga-belakang',
-    distanceMeters: 18,
-    isStairs: true,
-    instructionForward: 'Naik Tangga Belakang (Utara) dari Lantai 1 ke Lantai 2.',
-    instructionBackward: 'Turun Tangga Belakang (Utara) dari Lantai 2 ke Lantai 1.',
-    landmarkHint: 'Area tangga dekat Kantin',
-  },
-  {
-    from: 'f2-tangga-belakang',
-    to: 'f3-tangga-belakang',
-    distanceMeters: 18,
-    isStairs: true,
-    instructionForward: 'Naik Tangga Belakang dari Lantai 2 ke Lantai 3.',
-    instructionBackward: 'Turun Tangga Belakang dari Lantai 3 ke Lantai 2.',
-    landmarkHint: 'Bordes utara Lantai 3',
-  },
-  {
-    from: 'f3-tangga-belakang',
-    to: 'f4-tangga-belakang',
-    distanceMeters: 18,
-    isStairs: true,
-    instructionForward: 'Naik Tangga Belakang dari Lantai 3 ke Lantai 4.',
-    instructionBackward: 'Turun Tangga Belakang dari Lantai 4 ke Lantai 3.',
-    landmarkHint: 'Bordes utara Lantai 4',
-  },
-
-  // Lift Kampus (Lt 1 <-> 2 <-> 3 <-> 4)
-  {
-    from: 'f1-lift',
-    to: 'f2-lift',
-    distanceMeters: 8,
-    isElevator: true,
-    instructionForward: 'Masuk Lift Kampus di Lt. 1, tekan tombol [2] untuk naik ke Lantai 2.',
-    instructionBackward: 'Masuk Lift Kampus di Lt. 2, tekan tombol [1] untuk turun ke Lantai 1.',
-    landmarkHint: 'Pintu Lift sebelah timur',
-  },
-  {
-    from: 'f2-lift',
-    to: 'f3-lift',
-    distanceMeters: 8,
-    isElevator: true,
-    instructionForward: 'Naik Lift Kampus ke Lantai 3 (tekan tombol [3]).',
-    instructionBackward: 'Turun Lift Kampus ke Lantai 2 (tekan tombol [2]).',
-    landmarkHint: 'Layar indikator lantai di dalam Lift',
-  },
-  {
-    from: 'f3-lift',
-    to: 'f4-lift',
-    distanceMeters: 8,
-    isElevator: true,
-    instructionForward: 'Naik Lift Kampus ke Lantai 4 (tekan tombol [4]).',
-    instructionBackward: 'Turun Lift Kampus ke Lantai 3 (tekan tombol [3]).',
-    landmarkHint: 'Lantai teratas Lift Kampus',
+    id: 'G4',
+    name: 'Gedung 4',
+    subtitle: 'Lab Kendali, BEM, Poliklinik, Mushola, Lab E–F',
+    quickTag: 'Gedung 4 & Mushola',
+    x: 204,
+    y: 158,
+    w: 96,
+    h: 46,
+    color: '#15803d',
+    floors: [
+      {
+        floor: 1,
+        label: 'Lantai 1 (41x)',
+        rooms: [
+          {
+            code: 'R.411',
+            name: 'Lab Kendali (411)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Sistem Kendali & Elektronika.',
+          },
+          {
+            code: 'R.412-413',
+            name: 'R. Kelas (412–413)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 4 Lantai 1.',
+          },
+          {
+            code: 'R.414',
+            name: 'R. BEM (414)',
+            cat: 'Fasilitas',
+            desc: 'Sekretariat Badan Eksekutif Mahasiswa (BEM).',
+          },
+          {
+            code: 'R.415',
+            name: 'R. Poliklinik (415)',
+            cat: 'Layanan & Info',
+            desc: 'Layanan kesehatan & P3K kampus.',
+          },
+        ],
+      },
+      {
+        floor: 2,
+        label: 'Lantai 2 (42x)',
+        rooms: [
+          {
+            code: 'R.421',
+            name: 'R. Inbis (421)',
+            cat: 'Fasilitas',
+            desc: 'Ruang Inkubator Bisnis Mahasiswa.',
+          },
+          {
+            code: 'R.422',
+            name: 'Mushola (422)',
+            cat: 'Area Ibadah',
+            desc: 'Mushola utama kampus di Gedung 4 Lantai 2.',
+          },
+          {
+            code: 'R.423',
+            name: 'R. Kelas (423)',
+            cat: 'Ruang Kelas',
+            desc: 'Ruang kelas Gedung 4 Lantai 2.',
+          },
+          {
+            code: 'R.424',
+            name: 'Lab E (424)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer E.',
+          },
+          {
+            code: 'R.425',
+            name: 'Lab F (425)',
+            cat: 'Laboratorium',
+            desc: 'Laboratorium Komputer F.',
+          },
+        ],
+      },
+    ],
   },
 ];
+
+export const OUTDOOR_FACILITIES: OutdoorFacility[] = [
+  {
+    id: 'BASKET',
+    name: 'Lapangan Basket',
+    code: 'LAP-BASKET',
+    cat: 'Fasilitas',
+    x: 204,
+    y: 222,
+    w: 96,
+    h: 44,
+    desc: 'Lapangan basket outdoor di sisi tengah kanan dekat Gedung 4.',
+  },
+  {
+    id: 'PANGGUNG',
+    name: 'Panggung Utama',
+    code: 'PANGGUNG',
+    cat: 'Fasilitas',
+    x: 204,
+    y: 278,
+    w: 96,
+    h: 34,
+    desc: 'Panggung acara kemahasiswaan di bawah Lapangan Basket.',
+  },
+  {
+    id: 'LOUNGE',
+    name: 'Instiki Lounge / Kantin',
+    code: 'KANTIN',
+    cat: 'Fasilitas',
+    x: 204,
+    y: 322,
+    w: 96,
+    h: 38,
+    desc: 'Kantin utama & Instiki Lounge di sisi kanan dekat gerbang masuk.',
+  },
+];
+
+// Flattened directory of every real INSTIKI room + outdoor facility
+export const ALL_ROOMS: RoomItem[] = (() => {
+  const list: RoomItem[] = [];
+  for (const b of BUILDINGS) {
+    for (const f of b.floors) {
+      for (const r of f.rooms) {
+        list.push({
+          id: `${b.id}_${r.code}`,
+          code: r.code,
+          name: r.name,
+          cat: r.cat,
+          desc: r.desc,
+          buildingId: b.id,
+          buildingName: b.name,
+          floor: f.floor,
+          floorLabel: f.label,
+          x: b.x + b.w / 2,
+          y: b.y + b.h / 2,
+        });
+      }
+    }
+  }
+  for (const o of OUTDOOR_FACILITIES) {
+    list.push({
+      id: o.id,
+      code: o.code,
+      name: o.name,
+      cat: o.cat,
+      desc: o.desc,
+      buildingId: 'OUTDOOR',
+      buildingName: 'Area Luar Kampus',
+      floor: 1,
+      floorLabel: 'Area Terbuka',
+      x: o.x + o.w / 2,
+      y: o.y + o.h / 2,
+    });
+  }
+  return list;
+})();
+
+export function getRoomById(roomId: string): RoomItem | undefined {
+  return ALL_ROOMS.find((r) => r.id === roomId);
+}
+
+export function getBuildingById(buildingId: string): BuildingInfo | undefined {
+  return BUILDINGS.find((b) => b.id === buildingId);
+}
 
 export const COURSE_SCHEDULES: CourseSchedule[] = [
   {
@@ -1140,20 +838,20 @@ export const COURSE_SCHEDULES: CourseSchedule[] = [
     day: 'Senin',
     startTime: '08:00',
     endTime: '10:30',
-    roomId: 'f2-lab2',
+    roomId: 'G1_R.112',
     classCode: 'TI-A',
     prodi: 'TI',
     isUpcoming: true,
   },
   {
-    id: 'mk-web',
+    id: 'mk-android',
     code: 'IF308',
-    name: 'Pemrograman Web Lanjut',
+    name: 'Pemrograman Mobile & Android',
     lecturer: 'I Putu Gede Surya, S.Kom., M.T',
     day: 'Senin',
     startTime: '13:00',
     endTime: '15:30',
-    roomId: 'f2-lab1',
+    roomId: 'G6_R.621',
     classCode: 'TI-A',
     prodi: 'TI',
   },
@@ -1165,7 +863,7 @@ export const COURSE_SCHEDULES: CourseSchedule[] = [
     day: 'Selasa',
     startTime: '09:00',
     endTime: '11:30',
-    roomId: 'f3-lab-jar',
+    roomId: 'G5_R.534',
     classCode: 'TI-A',
     prodi: 'TI',
   },
@@ -1177,19 +875,19 @@ export const COURSE_SCHEDULES: CourseSchedule[] = [
     day: 'Rabu',
     startTime: '10:30',
     endTime: '13:00',
-    roomId: 'f4-smart403',
+    roomId: 'G4_R.424',
     classCode: 'TI-A',
     prodi: 'TI',
   },
   {
-    id: 'mk-ai',
-    code: 'IF401',
-    name: 'Kecerdasan Buatan',
+    id: 'mk-algo',
+    code: 'IF201',
+    name: 'Struktur Data & Algoritma',
     lecturer: 'Kadek Bagus Pratama, M.Cs',
     day: 'Kamis',
     startTime: '08:00',
     endTime: '10:30',
-    roomId: 'f3-r302',
+    roomId: 'G3_R.331-339',
     classCode: 'TI-A',
     prodi: 'TI',
   },
@@ -1201,7 +899,7 @@ export const COURSE_SCHEDULES: CourseSchedule[] = [
     day: 'Jumat',
     startTime: '10:00',
     endTime: '12:00',
-    roomId: 'f1-r101',
+    roomId: 'G1_R.122',
     classCode: 'TI-A',
     prodi: 'TI',
   },
@@ -1214,7 +912,7 @@ export const COURSE_SCHEDULES: CourseSchedule[] = [
     day: 'Senin',
     startTime: '08:30',
     endTime: '11:00',
-    roomId: 'f3-lab-dkv',
+    roomId: 'G5_R.541',
     classCode: 'DKV-B',
     prodi: 'DKV',
     isUpcoming: true,
@@ -1222,34 +920,83 @@ export const COURSE_SCHEDULES: CourseSchedule[] = [
   {
     id: 'mk-dkv-2',
     code: 'DK204',
-    name: 'Ilustrasi Digital & Branding',
+    name: 'Studio Ilustrasi & Multimedia',
     lecturer: 'Putu Indah Permata, M.Ds',
     day: 'Senin',
     startTime: '13:30',
     endTime: '16:00',
-    roomId: 'f4-r402',
+    roomId: 'G3_R.321',
     classCode: 'DKV-B',
     prodi: 'DKV',
   },
   {
     id: 'mk-dkv-3',
     code: 'DK209',
-    name: 'Fotografi & Videografi Komersial',
+    name: 'Seminar Desain & Pameran Karya',
     lecturer: 'Komang Adi Putra, S.Sn., M.Sn',
     day: 'Rabu',
     startTime: '09:00',
     endTime: '11:30',
-    roomId: 'f1-aula',
+    roomId: 'G2_R.231',
     classCode: 'DKV-B',
     prodi: 'DKV',
   },
 ];
 
-export const RECOVER_LANDMARKS = [
-  { id: 'f1-lobi', label: 'Lobi Utama (Lt. 1)' },
-  { id: 'f1-kantin', label: 'Kantin INSTIKI (Lt. 1)' },
-  { id: 'f2-perpus', label: 'Perpustakaan (Lt. 2)' },
-  { id: 'f2-tangga-utama', label: 'Tangga Utama (Lt. 2)' },
-  { id: 'f3-tangga-utama', label: 'Tangga Utama (Lt. 3)' },
-  { id: 'f4-lift', label: 'Depan Lift (Lt. 4)' },
+/** Landmarks for "Tersesat?" instant re-routing (Prinsip 6: Prevent Errors / Recovery) */
+export const RECOVER_LANDMARKS: StartPoint[] = [
+  {
+    id: 'gerbang',
+    name: 'Patung Garuda / Gerbang',
+    shortName: 'Patung Garuda (G1)',
+    vehicleType: 'Pejalan Kaki',
+    x: 120,
+    y: 418,
+    desc: 'Area Patung Garuda & Gerbang Utama Jl. Tukad Pakerisan',
+  },
+  {
+    id: 'pos_g1',
+    name: 'Depan Gedung 1 (Front Office)',
+    shortName: 'Depan Gedung 1',
+    vehicleType: 'Pejalan Kaki',
+    x: 130,
+    y: 335,
+    desc: 'Selasar jalan utama depan Gedung 1',
+  },
+  {
+    id: 'pos_g2',
+    name: 'Depan Gedung 2 (BAAK)',
+    shortName: 'Depan Gedung 2',
+    vehicleType: 'Pejalan Kaki',
+    x: 130,
+    y: 275,
+    desc: 'Selasar jalan utama depan Gedung 2',
+  },
+  {
+    id: 'pos_lounge',
+    name: 'Instiki Lounge / Kantin',
+    shortName: 'Instiki Lounge',
+    vehicleType: 'Pejalan Kaki',
+    x: 204,
+    y: 341,
+    desc: 'Sisi kanan dekat Instiki Lounge & Panggung Utama',
+  },
+  {
+    id: 'pos_basket',
+    name: 'Lapangan Basket',
+    shortName: 'Lapangan Basket',
+    vehicleType: 'Pejalan Kaki',
+    x: 204,
+    y: 244,
+    desc: 'Area tengah kanan depan Lapangan Basket & Gedung 4',
+  },
+  {
+    id: 'pos_g6',
+    name: 'Cafetaria Gedung 6',
+    shortName: 'Cafetaria Gedung 6',
+    vehicleType: 'Pejalan Kaki',
+    x: 130,
+    y: 152,
+    desc: 'Sisi kiri jalan utama depan Gedung 6',
+  },
 ];

@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import {
-  CAMPUS_NODES,
+  ALL_ROOMS,
+  BUILDINGS,
   COURSE_SCHEDULES,
   CourseSchedule,
-  FloorNumber,
+  RoomCategory,
   StudentProfile,
+  getRoomById,
 } from '../../data/campusData';
-import { getNodeById } from '../../utils/pathfinder';
 import {
   ArrowRight,
   Building2,
   Calendar,
   Clock,
-  MapPin,
   Search,
   Sparkles,
 } from 'lucide-react';
@@ -22,7 +22,16 @@ interface ScheduleDirectoryScreenProps {
   onStartRouteToRoom: (roomId: string, course?: CourseSchedule) => void;
 }
 
-const DAYS: CourseSchedule['day'][] = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu' as any];
+const DAYS: CourseSchedule['day'][] = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const CATEGORIES: ('Semua' | RoomCategory)[] = [
+  'Semua',
+  'Layanan & Info',
+  'Laboratorium',
+  'Ruang Kelas',
+  'Area Ibadah',
+  'Pimpinan & Kantor',
+  'Fasilitas',
+];
 
 export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = ({
   profile,
@@ -30,55 +39,54 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
 }) => {
   const [subTab, setSubTab] = useState<'schedule' | 'rooms'>('schedule');
   const [selectedDay, setSelectedDay] = useState<string>('Semua');
-  const [selectedFloor, setSelectedFloor] = useState<FloorNumber | 'all'>('all');
+  const [selectedBuilding, setSelectedBuilding] = useState<string>('Semua');
+  const [selectedCat, setSelectedCat] = useState<'Semua' | RoomCategory>('Semua');
   const [filterText, setFilterText] = useState('');
 
   const myCourses = profile.isGuest
     ? COURSE_SCHEDULES
     : COURSE_SCHEDULES.filter((c) => c.prodi === profile.prodi);
 
+  const q = filterText.trim().toLowerCase();
+
   const filteredCourses = myCourses.filter((c) => {
     const matchesDay = selectedDay === 'Semua' || c.day === selectedDay;
-    const q = filterText.trim().toLowerCase();
-    const room = getNodeById(c.roomId);
+    const room = getRoomById(c.roomId);
     const matchesText =
       !q ||
       c.name.toLowerCase().includes(q) ||
       c.code.toLowerCase().includes(q) ||
-      (room?.label.toLowerCase().includes(q) ?? false);
+      (room?.name.toLowerCase().includes(q) ?? false) ||
+      (room?.code.toLowerCase().includes(q) ?? false);
     return matchesDay && matchesText;
   });
 
-  const allRooms = CAMPUS_NODES.filter(
-    (n) => n.kind === 'room' || n.kind === 'facility'
-  ).filter((n) => {
-    const matchesFloor = selectedFloor === 'all' || n.floor === selectedFloor;
-    const q = filterText.trim().toLowerCase();
+  const filteredRooms = ALL_ROOMS.filter((r) => {
+    const matchesBld = selectedBuilding === 'Semua' || r.buildingId === selectedBuilding;
+    const matchesCat = selectedCat === 'Semua' || r.cat === selectedCat;
     const matchesText =
       !q ||
-      n.label.toLowerCase().includes(q) ||
-      (n.description?.toLowerCase().includes(q) ?? false);
-    return matchesFloor && matchesText;
+      r.name.toLowerCase().includes(q) ||
+      r.code.toLowerCase().includes(q) ||
+      r.buildingName.toLowerCase().includes(q);
+    return matchesBld && matchesCat && matchesText;
   });
 
-  // Group rooms by floor (Pertemuan 3: Pengelompokan Informasi)
-  const groupedFloors: FloorNumber[] = ([1, 2, 3, 4] as FloorNumber[]).filter((fl) =>
-    allRooms.some((r) => r.floor === fl)
-  );
-
   return (
-    <div className="p-4 space-y-3.5 pb-6">
+    <div className="p-4 space-y-3 pb-6">
       <div>
-        <h1 className="text-base font-extrabold text-slate-900">Jadwal & Ruang Kampus</h1>
+        <h1 className="text-base font-extrabold text-slate-900">
+          Jadwal & Direktori Gedung (G1–G6)
+        </h1>
         <p className="text-[11px] text-slate-500">
           {profile.isGuest
-            ? 'Menampilkan seluruh jadwal & direktori ruangan INSTIKI'
-            : `Jadwal ${profile.name} (${profile.prodi}) & direktori ruangan`}
+            ? 'Semua jadwal kuliah & daftar lengkap ruangan INSTIKI'
+            : `Jadwal ${profile.name} & direktori lengkap Gedung 1–6`}
         </p>
       </div>
 
       {/* Segmented Control */}
-      <div className="grid grid-cols-2 bg-slate-200/75 p-1 rounded-xl gap-1">
+      <div className="grid grid-cols-2 bg-slate-200/80 p-1 rounded-xl gap-1">
         <button
           type="button"
           onClick={() => setSubTab('schedule')}
@@ -99,11 +107,11 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          <Building2 className="w-3.5 h-3.5" /> Direktori Ruangan
+          <Building2 className="w-3.5 h-3.5" /> Gedung & Ruang ({ALL_ROOMS.length})
         </button>
       </div>
 
-      {/* Search Input */}
+      {/* Search Bar */}
       <div className="relative">
         <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
         <input
@@ -113,7 +121,7 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
           placeholder={
             subTab === 'schedule'
               ? 'Filter nama MatKul, kode, atau ruang...'
-              : 'Filter nama ruangan atau fasilitas...'
+              : 'Filter kode ruang (R.541), lab, atau gedung...'
           }
           className="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs outline-none focus:border-[#1A2352]"
         />
@@ -121,7 +129,7 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
 
       {subTab === 'schedule' ? (
         <div className="space-y-3">
-          {/* Day Filter Chips */}
+          {/* Day Filter */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 phone-scroll">
             {['Semua', ...DAYS].map((day) => (
               <button
@@ -140,17 +148,18 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
           </div>
 
           {filteredCourses.length === 0 ? (
-            /* Metacognition Empty State (Pertemuan 3 Slide 42-43) */
+            /* Metacognition Empty State */
             <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center space-y-2.5 shadow-xs">
               <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 mx-auto flex items-center justify-center">
                 <Sparkles className="w-5 h-5" />
               </div>
               <h3 className="text-xs font-extrabold text-slate-900">
-                Wah, tidak ada jadwal kuliah di {selectedDay === 'Semua' ? 'pencarian ini' : `hari ${selectedDay}`}!
+                Wah, tidak ada jadwal kuliah di{' '}
+                {selectedDay === 'Semua' ? 'pencarian ini' : `hari ${selectedDay}`}!
               </h3>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Daripada bingung mencari manual, kamu bisa langsung melihat jadwal hari Senin atau
-                menjelajahi direktori seluruh ruangan kampus.
+                Daripada bingung mencari manual, kamu bisa melihat jadwal hari Senin atau
+                menjelajahi direktori lengkap Gedung 1–6.
               </p>
               <div className="flex items-center justify-center gap-2 pt-1">
                 <button
@@ -169,16 +178,16 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
                     setSubTab('rooms');
                     setFilterText('');
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-[11px] font-bold cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-red-50 text-[#D32F2F] border border-red-200 text-[11px] font-bold cursor-pointer"
                 >
-                  Cek Semua Ruangan
+                  Cek Gedung G1–G6
                 </button>
               </div>
             </div>
           ) : (
             <div className="space-y-2">
               {filteredCourses.map((course) => {
-                const room = getNodeById(course.roomId);
+                const room = getRoomById(course.roomId);
                 return (
                   <div
                     key={course.id}
@@ -188,8 +197,8 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
                       <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-50 text-[#1A2352]">
                         {course.day} • {course.code}
                       </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
-                        {room?.label} (Lt. {room?.floor})
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-50 text-[#D32F2F] border border-red-200">
+                        {room?.buildingId} Lt. {room?.floor} • {room?.code}
                       </span>
                     </div>
                     <div>
@@ -217,79 +226,91 @@ export const ScheduleDirectoryScreen: React.FC<ScheduleDirectoryScreenProps> = (
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Floor Filter */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            {(['all', 1, 2, 3, 4] as const).map((fl) => (
+          {/* Building Filter + Count */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-slate-600">
+              Menampilkan {filteredRooms.length} lokasi
+            </span>
+            <select
+              aria-label="Filter Gedung"
+              value={selectedBuilding}
+              onChange={(e) => setSelectedBuilding(e.target.value)}
+              className="text-[11px] font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 cursor-pointer"
+            >
+              <option value="Semua">Semua Gedung (G1–G6)</option>
+              {BUILDINGS.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+              <option value="OUTDOOR">Area Luar Kampus</option>
+            </select>
+          </div>
+
+          {/* Category Chips (Recognize > Recall) */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 phone-scroll">
+            {CATEGORIES.map((cat) => (
               <button
-                key={String(fl)}
+                key={cat}
                 type="button"
-                onClick={() => setSelectedFloor(fl)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
-                  selectedFloor === fl
-                    ? 'bg-[#1A2352] text-white border-[#1A2352]'
+                onClick={() => setSelectedCat(cat)}
+                className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                  selectedCat === cat
+                    ? 'bg-[#D32F2F] text-white border-[#D32F2F]'
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                {fl === 'all' ? 'Semua Lantai' : `Lantai ${fl}`}
+                {cat}
               </button>
             ))}
           </div>
 
-          {groupedFloors.length === 0 ? (
+          {filteredRooms.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 text-center space-y-2">
-              <p className="text-xs font-bold text-slate-800">Ruangan tidak ditemukan</p>
+              <p className="text-xs font-bold text-slate-800">
+                Tidak ada ruangan yang cocok dengan filter ini.
+              </p>
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedFloor('all');
+                  setSelectedBuilding('Semua');
+                  setSelectedCat('Semua');
                   setFilterText('');
                 }}
                 className="px-3 py-1.5 rounded-xl bg-[#1A2352] text-white text-[11px] font-bold cursor-pointer"
               >
-                Tampilkan Semua Ruangan
+                Reset Filter Direktori
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {groupedFloors.map((floor) => {
-                const roomsInFloor = allRooms.filter((r) => r.floor === floor);
-                return (
-                  <div key={floor} className="space-y-1.5">
-                    <h3 className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider px-1">
-                      Lantai {floor} ({roomsInFloor.length} lokasi)
-                    </h3>
-                    <div className="space-y-1.5">
-                      {roomsInFloor.map((room) => (
-                        <div
-                          key={room.id}
-                          className="bg-white border border-slate-200 rounded-2xl p-2.5 flex items-center justify-between gap-2 shadow-2xs"
-                        >
-                          <div className="flex items-start gap-2 min-w-0">
-                            <div className="w-8 h-8 rounded-xl bg-slate-100 text-[#1A2352] flex items-center justify-center shrink-0 mt-0.5">
-                              <MapPin className="w-4 h-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-slate-900 truncate">
-                                {room.label}
-                              </p>
-                              <p className="text-[11px] text-slate-500 truncate">
-                                {room.description ?? room.landmark}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => onStartRouteToRoom(room.id)}
-                            className="shrink-0 px-2.5 py-1.5 rounded-xl bg-[#1A2352] hover:bg-slate-800 text-white text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            Rute <ArrowRight className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
+            <div className="space-y-1.5">
+              {filteredRooms.map((r) => (
+                <div
+                  key={r.id}
+                  className="bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-red-50 text-[#D32F2F] border border-red-200">
+                        {r.code}
+                      </span>
+                      <span className="text-[10px] text-slate-500 truncate">
+                        {r.buildingName} • {r.floorLabel}
+                      </span>
+                    </div>
+                    <div className="text-xs font-bold text-slate-800 mt-0.5 truncate">
+                      {r.name}
                     </div>
                   </div>
-                );
-              })}
+                  <button
+                    type="button"
+                    onClick={() => onStartRouteToRoom(r.id)}
+                    className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[#1A2352] hover:bg-[#D32F2F] text-white text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer transition"
+                  >
+                    Rute <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

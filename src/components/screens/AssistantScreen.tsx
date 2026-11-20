@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { CAMPUS_NODES, COURSE_SCHEDULES, CourseSchedule } from '../../data/campusData';
-import { getNodeById } from '../../utils/pathfinder';
+import {
+  ALL_ROOMS,
+  COURSE_SCHEDULES,
+  CourseSchedule,
+  getRoomById,
+} from '../../data/campusData';
 import { ArrowRight, Bot, HelpCircle, Send, User } from 'lucide-react';
 
 interface ChatMessage {
@@ -9,24 +13,20 @@ interface ChatMessage {
   text: string;
   suggestedRoomId?: string;
   suggestedCourse?: CourseSchedule;
-  suggestedParkingId?: string;
 }
 
 interface AssistantScreenProps {
   initialQuery?: string | null;
   onClearInitialQuery: () => void;
-  onStartRouteToRoom: (
-    roomId: string,
-    course?: CourseSchedule,
-    overrideStartId?: string
-  ) => void;
+  onStartRouteToRoom: (roomId: string, course?: CourseSchedule) => void;
 }
 
 const QUICK_QUESTIONS = [
-  'Kelas Human Computer Interaction di mana?',
-  'Parkir terdekat ke Smart Classroom 403?',
-  'Lokasi Lift Kampus ada di mana?',
-  'Lab Desain DKV lantai berapa?',
+  'Dimana ruang BAAK?',
+  'Kelas HCI di gedung mana?',
+  'Mushola ada di gedung mana?',
+  'Lokasi Lab DKV (541)?',
+  'Dimana Lab Android (621)?',
 ];
 
 export const AssistantScreen: React.FC<AssistantScreenProps> = ({
@@ -39,7 +39,7 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
     {
       id: 'welcome',
       sender: 'bot',
-      text: 'Halo! Saya asisten WayFinder INSTIKI. Tanyakan lokasi kelas, jadwal MatKul, lift, atau parkiran terdekat dengan bahasa santai saja.',
+      text: 'Halo! Saya asisten WayFinder INSTIKI. Tanyakan lokasi gedung (G1–G6), kode ruang (mis. R.541, R.213), mushola, atau jadwal MatKul dengan bahasa sehari-hari.',
     },
   ]);
 
@@ -54,62 +54,48 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
     };
 
     const q = query.toLowerCase();
-    let botReply: ChatMessage;
+    let botReply: ChatMessage | null = null;
 
     if (q.includes('hci') || q.includes('human computer')) {
       const course = COURSE_SCHEDULES.find((c) => c.id === 'mk-hci')!;
-      const room = getNodeById(course.roomId)!;
+      const room = getRoomById(course.roomId)!;
       botReply = {
         id: `b-${Date.now() + 1}`,
         sender: 'bot',
-        text: `Kelas Human Computer Interaction (${course.lecturer}) jadwalnya hari ${course.day} pukul ${course.startTime} di ${room.label} (Lantai ${room.floor}). Dari Parkiran Motor Depan cuma sekitar 2 menit lewat Tangga Utama!`,
+        text: `Kelas Human Computer Interaction (${course.lecturer}) jadwalnya hari ${course.day} pukul ${course.startTime} di ${room.name} (${room.buildingName}, ${room.floorLabel}).`,
         suggestedRoomId: room.id,
         suggestedCourse: course,
       };
-    } else if (q.includes('lift') || q.includes('akses')) {
-      botReply = {
-        id: `b-${Date.now() + 1}`,
-        sender: 'bot',
-        text: 'Lift Kampus berada di ujung Koridor Sayap Timur pada setiap lantai (Lt. 1–4). Kamu juga bisa mengaktifkan "Mode Lift" di halaman peta agar rute menghindari tangga.',
-        suggestedRoomId: 'f1-lift',
-      };
-    } else if (q.includes('403') || q.includes('smart')) {
-      const room = getNodeById('f4-smart403')!;
-      botReply = {
-        id: `b-${Date.now() + 1}`,
-        sender: 'bot',
-        text: `${room.label} ada di Lantai 4 Sayap Timur Utara. Paling dekat kalau parkir di Parkiran Motor Belakang lalu naik lewat Tangga Utara, atau naik Lift dari Lobi!`,
-        suggestedRoomId: room.id,
-        suggestedParkingId: 'parkir-belakang',
-      };
-    } else if (q.includes('dkv') || q.includes('desain')) {
-      const room = getNodeById('f3-lab-dkv')!;
-      botReply = {
-        id: `b-${Date.now() + 1}`,
-        sender: 'bot',
-        text: `${room.label} berada di Lantai 3 Sayap Timur Utara (${room.landmark}). Mau saya bukakan rutenya dari parkiran?`,
-        suggestedRoomId: room.id,
-      };
     } else {
-      // Search courses or rooms dynamically
       const matchedCourse = COURSE_SCHEDULES.find(
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.code.toLowerCase().includes(q)
       );
-      const matchedRoom = CAMPUS_NODES.find(
-        (n) =>
-          (n.kind === 'room' || n.kind === 'facility') &&
-          (n.label.toLowerCase().includes(q) ||
-            (n.shortLabel?.toLowerCase().includes(q) ?? false))
+
+      const matchedRoom = ALL_ROOMS.find(
+        (r) =>
+          q.includes(r.code.toLowerCase()) ||
+          q.includes(r.name.toLowerCase()) ||
+          (q.includes('baak') && r.code === 'R.213') ||
+          (q.includes('mushola') && r.code === 'R.422') ||
+          (q.includes('dkv') && r.code === 'R.541') ||
+          (q.includes('android') && r.code === 'R.621') ||
+          (q.includes('jaringan') && r.code === 'R.534') ||
+          (q.includes('perpus') && r.code === 'R.132') ||
+          (q.includes('front office') && r.code === 'FRONT OFFICE') ||
+          (q.includes('basket') && r.code === 'LAP-BASKET') ||
+          (q.includes('pura') && r.code === 'R.241') ||
+          (q.includes('aula') && r.code === 'R.231') ||
+          (q.includes('gym') && r.code === 'R.551')
       );
 
       if (matchedCourse) {
-        const room = getNodeById(matchedCourse.roomId)!;
+        const room = getRoomById(matchedCourse.roomId)!;
         botReply = {
           id: `b-${Date.now() + 1}`,
           sender: 'bot',
-          text: `MatKul ${matchedCourse.name} berlangsung hari ${matchedCourse.day} (${matchedCourse.startTime}) di ${room.label}, Lantai ${room.floor}.`,
+          text: `MatKul ${matchedCourse.name} berlangsung hari ${matchedCourse.day} (${matchedCourse.startTime}) di ${room.name}, ${room.buildingName} (${room.floorLabel}).`,
           suggestedRoomId: room.id,
           suggestedCourse: matchedCourse,
         };
@@ -117,19 +103,19 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
         botReply = {
           id: `b-${Date.now() + 1}`,
           sender: 'bot',
-          text: `${matchedRoom.label} ada di Lantai ${matchedRoom.floor}. Patokannya: ${matchedRoom.landmark ?? matchedRoom.description}.`,
+          text: `${matchedRoom.name} berada di ${matchedRoom.buildingName}, ${matchedRoom.floorLabel}. ${matchedRoom.desc}`,
           suggestedRoomId: matchedRoom.id,
         };
       } else {
         botReply = {
           id: `b-${Date.now() + 1}`,
           sender: 'bot',
-          text: 'Hmm, saya belum menemukan ruangan atau MatKul itu. Coba sebutkan nama ruangan seperti "Lab 2", "R.302", "Aula", atau nama mata kuliah seperti "HCI".',
+          text: 'Maaf, saya belum menemukan ruangan atau MatKul itu. Coba sebutkan kode ruang (mis. R.541, R.213, R.422) atau buka tab Jadwal & Gedung.',
         };
       }
     }
 
-    setMessages((prev) => [...prev, userMsg, botReply]);
+    setMessages((prev) => [...prev, userMsg, botReply!]);
     setInput('');
   };
 
@@ -147,9 +133,11 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
           <Bot className="w-4 h-4" />
         </div>
         <div>
-          <h1 className="text-sm font-extrabold text-slate-900">Tanya WayFinder (Naturalness)</h1>
+          <h1 className="text-sm font-extrabold text-slate-900">
+            Tanya WayFinder (Naturalness)
+          </h1>
           <p className="text-[11px] text-slate-500">
-            Tanya lokasi kelas atau rute dengan bahasa sehari-hari
+            Tanya lokasi gedung G1–G6 atau MatKul dengan bahasa santai
           </p>
         </div>
       </div>
@@ -168,7 +156,7 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
         ))}
       </div>
 
-      {/* Chat Messages */}
+      {/* Chat Thread */}
       <div className="space-y-2.5 flex-1">
         {messages.map((m) => (
           <div
@@ -202,11 +190,7 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
                 <button
                   type="button"
                   onClick={() =>
-                    onStartRouteToRoom(
-                      m.suggestedRoomId!,
-                      m.suggestedCourse,
-                      m.suggestedParkingId
-                    )
+                    onStartRouteToRoom(m.suggestedRoomId!, m.suggestedCourse)
                   }
                   className="mt-2 w-full py-1.5 px-2.5 rounded-xl bg-[#D32F2F] hover:bg-red-700 text-white text-[11px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer"
                 >
@@ -219,7 +203,7 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
         ))}
       </div>
 
-      {/* Chat Input */}
+      {/* Chat Input with Disabled Constraint when empty */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -231,29 +215,28 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Tanya lokasi MatKul / ruangan..."
+          placeholder="Ketik pertanyaan, mis. Lab Jaringan atau R.541..."
           className="flex-1 px-2.5 py-1.5 text-xs outline-none bg-transparent"
         />
         <button
           type="submit"
+          disabled={input.trim().length === 0}
           aria-label="Kirim pertanyaan"
-          className="w-8 h-8 rounded-xl bg-[#1A2352] hover:bg-slate-800 text-white flex items-center justify-center shrink-0 cursor-pointer"
+          className="w-8 h-8 rounded-xl bg-[#1A2352] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shrink-0 cursor-pointer transition"
         >
           <Send className="w-3.5 h-3.5" />
         </button>
       </form>
 
-      {/* Panduan Singkat Ikon Peta */}
-      <div className="bg-slate-100 border border-slate-200 rounded-2xl p-3 space-y-1.5">
+      {/* Digit Rule Hint (Metacognition) */}
+      <div className="bg-slate-100 border border-slate-200 rounded-2xl p-3 space-y-1">
         <p className="text-[11px] font-extrabold text-slate-700 inline-flex items-center gap-1">
-          <HelpCircle className="w-3.5 h-3.5 text-[#1A2352]" /> Panduan Singkat Peta
+          <HelpCircle className="w-3.5 h-3.5 text-[#1A2352]" /> Tips Kode Ruang INSTIKI
         </p>
-        <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-600">
-          <span>🅿️ Area Parkiran (Titik Awal)</span>
-          <span>🪜 Tangga Utama / Utara</span>
-          <span>🛗 Lift Kampus (Ramah Akses)</span>
-          <span>📍 Ruang Kelas / Lab Tujuan</span>
-        </div>
+        <p className="text-[10px] text-slate-600 leading-relaxed">
+          <strong>Digit 1 = Gedung</strong>, <strong>Digit 2 = Lantai</strong>. Contoh:{' '}
+          <code>R.541</code> (Lab DKV) berada di <strong>Gedung 5, Lantai 4</strong>.
+        </p>
       </div>
     </div>
   );

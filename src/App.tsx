@@ -1,141 +1,272 @@
 import React, { useMemo, useState } from 'react';
 import {
+  BuildingId,
   COURSE_SCHEDULES,
   CourseSchedule,
   STUDENT_PROFILES,
   StudentProfile,
+  getRoomById,
 } from './data/campusData';
-import { AppTab, HCI_INSIGHTS_BY_TAB } from './data/hciInsights';
-import { findCampusRoute } from './utils/pathfinder';
+import {
+  AppTab,
+  HCI_INSIGHTS_BY_TAB,
+  MAPPING_DATA,
+  MappingGroup,
+} from './data/hciInsights';
+import { computeCampusRoute } from './utils/pathfinder';
 import { HomeScreen } from './components/screens/HomeScreen';
 import { MapNavigationScreen } from './components/screens/MapNavigationScreen';
 import { ScheduleDirectoryScreen } from './components/screens/ScheduleDirectoryScreen';
 import { AssistantScreen } from './components/screens/AssistantScreen';
 import { InstikiLogo } from './components/InstikiLogo';
 import {
+  ConfirmModal,
+  GuideModal,
+  ToastItem,
+  ToastStack,
+} from './components/Modals';
+import {
+  BatteryCharging,
   BookOpen,
   CalendarDays,
   Home,
-  Info,
   Map as MapIcon,
   MessageCircleQuestion,
   RotateCcw,
-  Smartphone,
   Sparkles,
+  Table2,
   Wifi,
-  BatteryCharging,
 } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [profile, setProfile] = useState<StudentProfile>(STUDENT_PROFILES[0]);
-  const [selectedParkingId, setSelectedParkingId] = useState<string>('parkir-depan');
+  const [selectedStartId, setSelectedStartId] = useState<string>('parkir_depan');
   const [parkingNote, setParkingNote] = useState<string>('Baris B2 dekat Pos Satpam');
-  const [selectedEndId, setSelectedEndId] = useState<string | null>('f2-lab2');
+  const [selectedDestRoomId, setSelectedDestRoomId] = useState<string>('G1_R.112');
   const [activeCourse, setActiveCourse] = useState<CourseSchedule | null>(COURSE_SCHEDULES[0]);
   const [accessibleOnly, setAccessibleOnly] = useState<boolean>(false);
-  const [recentRoomIds, setRecentRoomIds] = useState<string[]>(['f2-lab2', 'f4-smart403', 'f1-aula']);
-  const [assistantQuery, setAssistantQuery] = useState<string | null>(null);
-  const [showInspector, setShowInspector] = useState<boolean>(true);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
+  // Dual map mode state (Campus G1-G6 vs Building Floor Plan)
+  const [mapMode, setMapMode] = useState<'campus' | 'floor'>('campus');
+  const [selectedBuildingId, setSelectedBuildingId] =
+    useState<Exclude<BuildingId, 'OUTDOOR'>>('G1');
+  const [selectedFloor, setSelectedFloor] = useState<number>(1);
+  const [navActive, setNavActive] = useState<boolean>(false);
+
+  const [recentRoomIds, setRecentRoomIds] = useState<string[]>([
+    'G1_R.112',
+    'G5_R.541',
+    'G4_R.422',
+    'G2_R.213',
+  ]);
+  const [assistantQuery, setAssistantQuery] = useState<string | null>(null);
+
+  // Modals & Toasts
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [guideOpen, setGuideOpen] = useState<boolean>(false);
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  // Desktop Inspector Panel State
+  const [showInspector, setShowInspector] = useState<boolean>(true);
+  const [inspectorView, setInspectorView] = useState<'table' | 'live'>('table');
+  const [mappingFilter, setMappingFilter] = useState<'ALL' | MappingGroup>('ALL');
+
+  const pushToast = (
+    message: string,
+    type: ToastItem['type'] = 'success',
+    onUndo?: () => void
+  ) => {
+    const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((prev) => [...prev.slice(-2), { id, message, type, onUndo }]);
     setTimeout(() => {
-      setToastMessage((curr) => (curr === msg ? null : curr));
-    }, 2400);
+      setToasts((prev) => prev.filter((item) => item.id !== id));
+    }, 4200);
   };
 
   const route = useMemo(() => {
-    if (!selectedEndId) return null;
-    return findCampusRoute(selectedParkingId, selectedEndId, { accessibleOnly });
-  }, [selectedParkingId, selectedEndId, accessibleOnly]);
+    return computeCampusRoute(selectedStartId, selectedDestRoomId, {
+      accessibleOnly,
+    });
+  }, [selectedStartId, selectedDestRoomId, accessibleOnly]);
+
+  const applyDestination = (
+    roomId: string,
+    course?: CourseSchedule,
+    forceMapMode?: 'campus' | 'floor'
+  ) => {
+    const room = getRoomById(roomId);
+    if (!room) return;
+
+    setSelectedDestRoomId(room.id);
+    setActiveCourse(course ?? null);
+    if (room.buildingId !== 'OUTDOOR') {
+      setSelectedBuildingId(room.buildingId);
+      setSelectedFloor(room.floor);
+      setMapMode(forceMapMode ?? 'campus');
+    } else {
+      setMapMode('campus');
+    }
+    setNavActive(true);
+    setRecentRoomIds((prev) => [room.id, ...prev.filter((id) => id !== room.id)].slice(0, 5));
+    setActiveTab('map');
+    pushToast(`Rute ke ${room.name} (${room.buildingName}) aktif!`, 'success');
+  };
+
+  const handleStartRouteToRoom = (roomId: string, course?: CourseSchedule) => {
+    const nextRoom = getRoomById(roomId);
+    if (!nextRoom) return;
+
+    if (navActive && selectedDestRoomId !== roomId && activeTab === 'map') {
+      const currRoom = getRoomById(selectedDestRoomId);
+      setConfirmState({
+        open: true,
+        title: 'Ganti Tujuan Navigasi?',
+        message: `Kamu sedang menavigasi ke ${currRoom?.name ?? 'ruang sebelumnya'}. Ganti rute ke ${nextRoom.name}?`,
+        onConfirm: () => {
+          setConfirmState((s) => ({ ...s, open: false }));
+          applyDestination(roomId, course);
+        },
+      });
+      return;
+    }
+
+    applyDestination(roomId, course);
+  };
 
   const handleChangeProfile = (newProfile: StudentProfile) => {
     setProfile(newProfile);
-    setSelectedParkingId(newProfile.defaultParkingId);
-    triggerToast(`Profil beralih ke ${newProfile.name}`);
+    setSelectedStartId(newProfile.defaultStartId);
+    pushToast(`Profil beralih ke ${newProfile.name}`, 'info');
   };
 
-  const handleSelectParking = (parkingNodeId: string) => {
-    setSelectedParkingId(parkingNodeId);
-    triggerToast('Lokasi parkir diperbarui');
-  };
-
-  const handleStartRouteToRoom = (
-    roomId: string,
-    course?: CourseSchedule,
-    overrideStartId?: string
-  ) => {
-    if (overrideStartId) {
-      setSelectedParkingId(overrideStartId);
+  const handleSaveParkingNote = (newNote: string): boolean => {
+    const trimmed = newNote.trim();
+    if (!trimmed) {
+      pushToast('Catatan parkir tidak boleh kosong!', 'warn');
+      return false;
     }
-    setSelectedEndId(roomId);
-    setActiveCourse(course ?? null);
-    setRecentRoomIds((prev) => [roomId, ...prev.filter((id) => id !== roomId)].slice(0, 4));
-    setActiveTab('map');
+    const prevNote = parkingNote;
+    setParkingNote(trimmed);
+    pushToast('Catatan spot parkir disimpan.', 'success', () => {
+      setParkingNote(prevNote);
+      pushToast('Catatan spot dikembalikan.', 'info');
+    });
+    return true;
   };
 
-  const runScenario = (scenario: 1 | 2 | 3) => {
-    if (scenario === 1) {
+  const handleConfirmClearHistory = () => {
+    const backup = [...recentRoomIds];
+    setConfirmState({
+      open: true,
+      title: 'Hapus Riwayat Tujuan?',
+      message: 'Semua riwayat ruangan terakhir akan dibersihkan dari Beranda.',
+      onConfirm: () => {
+        setConfirmState((s) => ({ ...s, open: false }));
+        setRecentRoomIds([]);
+        pushToast('Riwayat tujuan dihapus.', 'info', () => {
+          setRecentRoomIds(backup);
+          pushToast('Riwayat tujuan dipulihkan.', 'success');
+        });
+      },
+    });
+  };
+
+  const handleGlobalReset = () => {
+    setConfirmState({
+      open: true,
+      title: 'Reset Seluruh Prototype?',
+      message:
+        'Semua pilihan rute, catatan parkir, mode akses, dan riwayat akan dikembalikan ke awal.',
+      onConfirm: () => {
+        setConfirmState((s) => ({ ...s, open: false }));
+        setProfile(STUDENT_PROFILES[0]);
+        setSelectedStartId('parkir_depan');
+        setParkingNote('Baris B2 dekat Pos Satpam');
+        setSelectedDestRoomId('G1_R.112');
+        setSelectedBuildingId('G1');
+        setSelectedFloor(1);
+        setMapMode('campus');
+        setNavActive(false);
+        setActiveCourse(COURSE_SCHEDULES[0]);
+        setAccessibleOnly(false);
+        setRecentRoomIds(['G1_R.112', 'G5_R.541', 'G4_R.422', 'G2_R.213']);
+        setActiveTab('home');
+        pushToast('Prototype berhasil direset ke kondisi awal.', 'info');
+      },
+    });
+  };
+
+  const runScenario = (scenario: 'hci' | 'baak' | 'dkv' | 'mushola') => {
+    if (scenario === 'hci') {
       setProfile(STUDENT_PROFILES[0]);
-      setSelectedParkingId('parkir-depan');
+      setSelectedStartId('parkir_depan');
       setAccessibleOnly(false);
-      setSelectedEndId('f2-lab2');
-      setActiveCourse(COURSE_SCHEDULES[0]);
-      setActiveTab('map');
-      triggerToast('Skenario 1: Rute ke Kelas HCI (Lab 2)');
-    } else if (scenario === 2) {
+      applyDestination('G1_R.112', COURSE_SCHEDULES[0], 'campus');
+    } else if (scenario === 'baak') {
       setProfile(STUDENT_PROFILES[2]);
-      setSelectedParkingId('parkir-belakang');
+      setSelectedStartId('parkir_depan');
       setAccessibleOnly(false);
-      setSelectedEndId('f4-smart403');
-      setActiveCourse(COURSE_SCHEDULES[3]);
-      setActiveTab('map');
-      triggerToast('Skenario 2: Maba menuju Smart Classroom 403');
-    } else {
+      applyDestination('G2_R.213', undefined, 'campus');
+    } else if (scenario === 'dkv') {
       setProfile(STUDENT_PROFILES[1]);
-      setSelectedParkingId('parkir-mobil');
+      setSelectedStartId('parkir_belakang');
+      setAccessibleOnly(false);
+      applyDestination('G5_R.541', COURSE_SCHEDULES[6], 'floor');
+    } else {
+      setSelectedStartId('parkir_depan');
       setAccessibleOnly(true);
-      setSelectedEndId('f3-lab-dkv');
-      setActiveCourse(COURSE_SCHEDULES[6]);
-      setActiveTab('map');
-      triggerToast('Skenario 3: Mode Aksesibilitas Lift aktif');
+      applyDestination('G4_R.422', undefined, 'campus');
     }
-  };
-
-  const handleReset = () => {
-    setProfile(STUDENT_PROFILES[0]);
-    setSelectedParkingId('parkir-depan');
-    setParkingNote('Baris B2 dekat Pos Satpam');
-    setSelectedEndId('f2-lab2');
-    setActiveCourse(COURSE_SCHEDULES[0]);
-    setAccessibleOnly(false);
-    setActiveTab('home');
-    triggerToast('Prototype direset ke kondisi awal');
   };
 
   const currentInsight = HCI_INSIGHTS_BY_TAB[activeTab];
+  const filteredMapping =
+    mappingFilter === 'ALL'
+      ? MAPPING_DATA
+      : MAPPING_DATA.filter((m) => m.group === mappingFilter);
+
+  const roleBadgeLabel = {
+    aktif: 'Mahasiswa Aktif',
+    maba: 'Mahasiswa Baru',
+    tamu: 'Tamu Kampus',
+  }[profile.role];
+
+  const badgeColors: Record<MappingGroup, string> = {
+    A: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    B: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+    C: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* Desktop Presentation Studio Header (hidden on very small phones if desired, shown nicely on desktop) */}
+      {/* Desktop Presentation Studio Header */}
       <header className="hidden sm:flex items-center justify-between px-5 py-3 bg-slate-900/90 border-b border-slate-800 backdrop-blur sticky top-0 z-30">
         <div className="flex items-center gap-3">
           <div className="bg-white rounded-xl px-2 py-1.5 shadow-sm flex items-center justify-center">
             <InstikiLogo variant="mark" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-sm font-extrabold text-white">
-                INSTIKI WayFinder — Interactive UI Prototype
+                INSTIKI WayFinder — Prototype Denah Kampus & Prinsip HCI
               </h1>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                UTS HCI
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Gedung 1–6 + 17 Prinsip A, B, C
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Navigasi Kampus: Dari Parkiran ke Ruang Kelas Sesuai Mata Kuliah
+              Jl. Tukad Pakerisan No. 97, Panjer, Denpasar • Navigasi Parkiran ➔ Ruang Kelas sesuai MatKul
             </p>
           </div>
         </div>
@@ -151,12 +282,12 @@ export function App() {
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span>{showInspector ? 'Tutup Panel Teori HCI' : 'Inspeksi Teori HCI'}</span>
+            <span>{showInspector ? 'Sembunyikan Panel HCI' : 'Tampilkan Panel HCI'}</span>
           </button>
           <button
             type="button"
-            onClick={handleReset}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 inline-flex items-center gap-1.5 cursor-pointer"
+            onClick={handleGlobalReset}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 inline-flex items-center gap-1.5 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset</span>
@@ -166,76 +297,103 @@ export function App() {
 
       {/* Main Presentation Stage */}
       <main className="flex-1 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 sm:p-6 max-w-7xl w-full mx-auto">
-        {/* Left/Center: Mobile Device Prototype Frame */}
+        {/* LEFT/CENTER: Mobile Device Prototype Frame */}
         <div className="w-full sm:w-auto flex flex-col items-center shrink-0">
-          {/* Phone Outer Bezel */}
-          <div className="w-full sm:w-[390px] sm:h-[780px] min-h-screen sm:min-h-0 bg-[#F8FAFC] text-slate-900 sm:rounded-[44px] sm:border-[10px] sm:border-slate-800 sm:shadow-[0_24px_70px_rgba(0,0,0,0.65)] flex flex-col overflow-hidden relative">
-            {/* Simulated Mobile Status Bar */}
+          <div className="w-full sm:w-[395px] sm:h-[790px] min-h-screen sm:min-h-0 bg-[#F8FAFC] text-slate-900 sm:rounded-[44px] sm:border-[10px] sm:border-slate-800 sm:shadow-[0_24px_70px_rgba(0,0,0,0.65)] flex flex-col overflow-hidden relative">
+            {/* Simulated Mobile Status Bar + Metacognition Guide (?) Button */}
             <div className="bg-[#141E46] text-white px-5 pt-2.5 pb-1.5 flex items-center justify-between text-[11px] font-bold shrink-0 select-none">
-              <span>07:45</span>
-              {/* Dynamic Island / Notch */}
-              <div className="hidden sm:block w-24 h-4 bg-slate-950 rounded-full" />
-              <div className="flex items-center gap-1.5 text-slate-200">
-                <Wifi className="w-3.5 h-3.5" />
-                <BatteryCharging className="w-4 h-4" />
+              <span>07:45 WITA</span>
+              <div className="flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded-full bg-white/15 text-[10px] font-semibold">
+                  {roleBadgeLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGuideOpen(true)}
+                  title="Panduan Cara Pakai & Logika Kode Ruang (Metakognisi)"
+                  className="w-5 h-5 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shadow cursor-pointer"
+                >
+                  ?
+                </button>
+                <Wifi className="w-3 h-3 text-slate-300 ml-0.5" />
+                <BatteryCharging className="w-3.5 h-3.5 text-slate-300" />
               </div>
             </div>
 
-            {/* Feedback Toast inside Phone (Prinsip Desain: Feedback) */}
-            {toastMessage && (
-              <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 w-[86%] pointer-events-none">
-                <div className="bg-slate-900/95 text-white text-[11px] font-bold px-3.5 py-2 rounded-xl shadow-lg text-center border border-slate-700">
-                  {toastMessage}
-                </div>
-              </div>
-            )}
-
-            {/* Scrollable Mobile Viewport */}
+            {/* Scrollable Mobile App Body */}
             <div className="flex-1 overflow-y-auto phone-scroll bg-[#F4F6FA]">
               {activeTab === 'home' && (
                 <HomeScreen
                   profile={profile}
                   onChangeProfile={handleChangeProfile}
-                  selectedParkingId={selectedParkingId}
-                  onSelectParking={handleSelectParking}
+                  selectedStartId={selectedStartId}
+                  onSelectStart={(id) => {
+                    setSelectedStartId(id);
+                    pushToast('Titik awal diperbarui', 'info');
+                  }}
                   parkingNote={parkingNote}
-                  onChangeParkingNote={setParkingNote}
+                  onSaveParkingNote={handleSaveParkingNote}
+                  accessibleOnly={accessibleOnly}
+                  onToggleAccessible={() => {
+                    setAccessibleOnly((prev) => {
+                      const next = !prev;
+                      pushToast(
+                        next
+                          ? 'Mode Ramah Akses (Tanpa Tangga) aktif'
+                          : 'Mode Normal (Tangga Utama) aktif',
+                        'info'
+                      );
+                      return next;
+                    });
+                  }}
                   recentRoomIds={recentRoomIds}
+                  onConfirmClearHistory={handleConfirmClearHistory}
                   onStartRouteToRoom={handleStartRouteToRoom}
                   onOpenAssistant={(q) => {
                     if (q) setAssistantQuery(q);
                     setActiveTab('assistant');
                   }}
                   onOpenSchedule={() => setActiveTab('schedule')}
+                  onOpenCampusMap={() => {
+                    setMapMode('campus');
+                    setActiveTab('map');
+                  }}
                 />
               )}
 
               {activeTab === 'map' && (
                 <MapNavigationScreen
                   route={route}
-                  selectedStartId={selectedParkingId}
-                  selectedEndId={selectedEndId}
+                  selectedStartId={selectedStartId}
+                  selectedDestRoomId={selectedDestRoomId}
                   activeCourse={activeCourse}
                   accessibleOnly={accessibleOnly}
+                  mapMode={mapMode}
+                  selectedBuildingId={selectedBuildingId}
+                  selectedFloor={selectedFloor}
+                  onChangeMapMode={setMapMode}
+                  onSelectBuilding={(bId) => {
+                    setSelectedBuildingId(bId);
+                    setSelectedFloor(1);
+                  }}
+                  onSelectFloor={setSelectedFloor}
                   onToggleAccessible={() => {
                     setAccessibleOnly((prev) => {
                       const next = !prev;
-                      triggerToast(
+                      pushToast(
                         next
-                          ? 'Rute dihitung ulang via Lift (Tanpa Tangga)'
-                          : 'Rute normal (Tangga / Tercepat) aktif'
+                          ? 'Mode Ramah Akses (Tanpa Tangga) aktif'
+                          : 'Mode Normal aktif',
+                        'info'
                       );
                       return next;
                     });
                   }}
                   onChangeStart={(id) => {
-                    setSelectedParkingId(id);
-                    triggerToast('Titik awal rute diperbarui');
+                    setSelectedStartId(id);
+                    pushToast('Titik awal rute diperbarui', 'info');
                   }}
-                  onChangeEnd={(id) => {
-                    setSelectedEndId(id);
-                    setActiveCourse(null);
-                  }}
+                  onChangeDestRoom={(roomId) => applyDestination(roomId, undefined, mapMode)}
                   onBackHome={() => setActiveTab('home')}
                 />
               )}
@@ -256,15 +414,37 @@ export function App() {
               )}
             </div>
 
-            {/* Persistent Bottom Navigation Bar (Prinsip 4: Strive for Consistency) */}
+            {/* Toast Stack (Feedback + Undo) */}
+            <ToastStack
+              toasts={toasts}
+              onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
+            />
+
+            {/* Modals inside Phone Frame */}
+            <ConfirmModal
+              open={confirmState.open}
+              title={confirmState.title}
+              message={confirmState.message}
+              onCancel={() => setConfirmState((s) => ({ ...s, open: false }))}
+              onConfirm={confirmState.onConfirm}
+            />
+            <GuideModal
+              open={guideOpen}
+              onClose={() => {
+                setGuideOpen(false);
+                pushToast('Selamat menggunakan INSTIKI WayFinder!', 'success');
+              }}
+            />
+
+            {/* Persistent Bottom Navigation Bar */}
             <nav
               aria-label="Navigasi Utama Aplikasi"
               className="bg-white border-t border-slate-200 px-2 py-1.5 grid grid-cols-4 shrink-0"
             >
               {[
                 { id: 'home' as AppTab, label: 'Beranda', icon: Home },
-                { id: 'map' as AppTab, label: 'Peta Rute', icon: MapIcon },
-                { id: 'schedule' as AppTab, label: 'Jadwal', icon: CalendarDays },
+                { id: 'map' as AppTab, label: 'Peta & Denah', icon: MapIcon },
+                { id: 'schedule' as AppTab, label: 'Jadwal & G1–6', icon: CalendarDays },
                 { id: 'assistant' as AppTab, label: 'Tanya', icon: MessageCircleQuestion },
               ].map((item) => {
                 const Icon = item.icon;
@@ -287,105 +467,236 @@ export function App() {
               })}
             </nav>
 
-            {/* iOS-style Home Indicator */}
             <div className="hidden sm:flex justify-center py-1.5 bg-white shrink-0">
               <div className="w-28 h-1 rounded-full bg-slate-300" />
             </div>
           </div>
         </div>
 
-        {/* Right Side: UTS Presentation & HCI Theory Inspector Panel (Desktop) */}
+        {/* RIGHT SIDE: UTS Demo Scenarios + 17-Point HCI Audit Panel */}
         {showInspector && (
-          <aside className="hidden sm:block flex-1 max-w-xl w-full space-y-4">
-            {/* Quick UTS Demo Scenarios */}
+          <aside className="hidden sm:block flex-1 max-w-2xl w-full space-y-4">
+            {/* Quick UTS Demo Scenarios (Real G1-G6) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h2 className="text-xs font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4" /> Skenario Demo Presentasi UTS
+                  <Sparkles className="w-4 h-4" /> Skenario Demo Cepat (Denah Resmi G1–G6)
                 </h2>
-                <span className="text-[11px] text-slate-400 inline-flex items-center gap-1">
-                  <Smartphone className="w-3.5 h-3.5" /> Klik untuk simulasi cepat
+                <span className="text-[11px] text-slate-400">
+                  Klik untuk langsung uji rute antar gedung & lantai
                 </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => runScenario(1)}
-                  className="text-left p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-red-500/60 transition cursor-pointer"
+                  onClick={() => runScenario('hci')}
+                  className="text-left p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-800 border border-slate-700 hover:border-rose-400/60 transition cursor-pointer"
                 >
-                  <p className="text-[11px] font-extrabold text-white">1. Kelas HCI</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    Parkir Depan ➔ Lab Komputer 2 (Lt. 2)
+                  <p className="text-xs font-extrabold text-rose-300">
+                    1. Kuliah HCI (Lab A)
+                  </p>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    Parkir Depan ➔ Gedung 1 Lt. 1 (R.112)
                   </p>
                 </button>
                 <button
                   type="button"
-                  onClick={() => runScenario(2)}
-                  className="text-left p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-amber-500/60 transition cursor-pointer"
+                  onClick={() => runScenario('baak')}
+                  className="text-left p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-800 border border-slate-700 hover:border-amber-400/60 transition cursor-pointer"
                 >
-                  <p className="text-[11px] font-extrabold text-white">2. Maba ke Lt. 4</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    Parkir Belakang ➔ Smart Class 403
+                  <p className="text-xs font-extrabold text-amber-300">
+                    2. Maba ke Ruang BAAK
+                  </p>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    Parkir Depan ➔ Gedung 2 Lt. 1 (R.213)
                   </p>
                 </button>
                 <button
                   type="button"
-                  onClick={() => runScenario(3)}
-                  className="text-left p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-sky-500/60 transition cursor-pointer"
+                  onClick={() => runScenario('dkv')}
+                  className="text-left p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-800 border border-slate-700 hover:border-emerald-400/60 transition cursor-pointer"
                 >
-                  <p className="text-[11px] font-extrabold text-white">3. Rute Lift</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
-                    Parkir Mobil ➔ Lab DKV (Tanpa Tangga)
+                  <p className="text-xs font-extrabold text-emerald-300">
+                    3. Kuliah Lab DKV
+                  </p>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    Parkir Belakang ➔ Gedung 5 Lt. 4 (R.541)
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runScenario('mushola')}
+                  className="text-left p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-800 border border-slate-700 hover:border-sky-400/60 transition cursor-pointer"
+                >
+                  <p className="text-xs font-extrabold text-sky-300">
+                    4. Mushola (Ramah Akses)
+                  </p>
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    Parkir Depan ➔ Gedung 4 Lt. 2 (R.422)
                   </p>
                 </button>
               </div>
             </div>
 
-            {/* Live HCI Theory Breakdown per Active Screen */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                    Inspeksi Materi Pertemuan 1–3
-                  </span>
-                  <h2 className="text-sm font-extrabold text-white mt-0.5">
-                    {currentInsight.title}
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    {currentInsight.summary}
-                  </p>
+            {/* Coverage Summary Cards (Kelompok A, B, C) */}
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+                  Kelompok A
                 </div>
+                <div className="text-xs font-extrabold text-white mt-0.5">
+                  7 Prinsip Dasar HCI
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                  Know User, Task, Memory Load, Consistency, Remind, Undo, Naturalness.
+                </p>
+              </div>
+              <div className="bg-slate-900 border border-sky-500/30 rounded-2xl p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-sky-400">
+                  Kelompok B
+                </div>
+                <div className="text-xs font-extrabold text-white mt-0.5">
+                  5 Prinsip Interaksi
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                  Visibility, Feedback, Constraints, Consistency, Affordance.
+                </p>
+              </div>
+              <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-3">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400">
+                  Kelompok C
+                </div>
+                <div className="text-xs font-extrabold text-white mt-0.5">
+                  5 Proses Kognisi
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                  Atensi, Persepsi, Memori, Kebahasaan, Metakognisi.
+                </p>
+              </div>
+            </div>
+
+            {/* Panel Mode Switcher: 17-Point Audit Table vs Live Screen Inspector */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setInspectorView('table')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer ${
+                      inspectorView === 'table'
+                        ? 'bg-[#D32F2F] text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Table2 className="w-3.5 h-3.5" /> Tabel 17 Prinsip (A, B, C)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectorView('live')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer ${
+                      inspectorView === 'live'
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" /> Inspeksi Layar Aktif
+                  </button>
+                </div>
+
+                {inspectorView === 'table' && (
+                  <div className="flex flex-wrap gap-1">
+                    {(
+                      [
+                        { id: 'ALL', label: 'Semua (17)' },
+                        { id: 'A', label: 'A. HCI (7)' },
+                        { id: 'B', label: 'B. Interaksi (5)' },
+                        { id: 'C', label: 'C. Kognisi (5)' },
+                      ] as const
+                    ).map((btn) => (
+                      <button
+                        key={btn.id}
+                        type="button"
+                        onClick={() => setMappingFilter(btn.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition ${
+                          mappingFilter === btn.id
+                            ? 'bg-red-600 text-white'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                        }`}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2.5 pt-1">
-                {currentInsight.items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-1"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-extrabold text-white">{item.principle}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 shrink-0">
-                        {item.category}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      {item.application}
+              {inspectorView === 'table' ? (
+                <div className="overflow-x-auto max-h-[370px] overflow-y-auto rounded-xl border border-slate-800">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-slate-950 text-slate-300 sticky top-0 z-10">
+                      <tr>
+                        <th className="p-2.5 font-bold border-b border-slate-800 w-[26%]">
+                          Fitur / Layar
+                        </th>
+                        <th className="p-2.5 font-bold border-b border-slate-800 w-[26%]">
+                          Prinsip
+                        </th>
+                        <th className="p-2.5 font-bold border-b border-slate-800">
+                          Implementasi Nyata
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 bg-slate-950/40 text-slate-200">
+                      {filteredMapping.map((row, i) => (
+                        <tr key={i} className="hover:bg-slate-800/50 transition">
+                          <td className="p-2.5 font-semibold text-white align-top text-[11px]">
+                            {row.feature}
+                          </td>
+                          <td className="p-2.5 align-top">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-md border text-[10px] font-bold ${badgeColors[row.group]}`}
+                            >
+                              {row.principle}
+                            </span>
+                          </td>
+                          <td className="p-2.5 text-slate-300 leading-relaxed align-top text-[11px]">
+                            {row.reason}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">
+                      {currentInsight.title}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                      {currentInsight.summary}
                     </p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Note for Customizing Campus Data */}
-            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-3.5 flex items-start gap-2.5">
-              <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-              <div className="text-[11px] text-slate-300 leading-relaxed">
-                <span className="font-bold text-white">Catatan Edit Data Kampus:</span> Seluruh
-                nama parkiran, kode ruang, denah 2D per lantai, dan jadwal MatKul saat ini memakai
-                contoh realistis di <code className="text-amber-300">src/data/campusData.ts</code>{' '}
-                agar mudah disesuaikan dengan denah asli INSTIKI sebelum pengumpulan UTS.
-              </div>
+                  {currentInsight.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-white">
+                          {item.principle}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 shrink-0">
+                          {item.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        {item.application}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </aside>
         )}
