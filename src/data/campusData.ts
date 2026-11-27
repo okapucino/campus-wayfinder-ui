@@ -93,6 +93,7 @@ export interface CourseSchedule {
 export interface StudentProfile {
   id: string;
   name: string;
+  greetingName: string;
   nim: string;
   role: 'aktif' | 'maba' | 'tamu';
   prodi: 'TI' | 'DKV' | 'Umum';
@@ -105,6 +106,7 @@ export const STUDENT_PROFILES: StudentProfile[] = [
   {
     id: 'mhs-ti',
     name: 'I Made Aditya (TI)',
+    greetingName: 'Aditya',
     nim: '2301010042',
     role: 'aktif',
     prodi: 'TI',
@@ -114,6 +116,7 @@ export const STUDENT_PROFILES: StudentProfile[] = [
   {
     id: 'mhs-dkv',
     name: 'Ni Luh Sari (DKV)',
+    greetingName: 'Sari',
     nim: '2402020118',
     role: 'aktif',
     prodi: 'DKV',
@@ -123,6 +126,7 @@ export const STUDENT_PROFILES: StudentProfile[] = [
   {
     id: 'maba',
     name: 'Mahasiswa Baru (Maba)',
+    greetingName: 'Maba',
     nim: 'Orientasi Kampus',
     role: 'maba',
     prodi: 'Umum',
@@ -133,6 +137,7 @@ export const STUDENT_PROFILES: StudentProfile[] = [
   {
     id: 'tamu',
     name: 'Tamu / Pengunjung',
+    greetingName: 'Tamu',
     nim: 'Mode Pengunjung',
     role: 'tamu',
     prodi: 'Umum',

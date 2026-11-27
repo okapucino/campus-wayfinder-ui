@@ -98,7 +98,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const roleGreeting = {
     maba: 'Selamat datang Maba! Mulai dari Front Office (G1) atau Ruang BAAK (G2).',
-    aktif: `Om Swastyastu, ${profile.name.split(' ')[0]}! Cek rute dari parkiran ke ruang kelasmu.`,
+    aktif: `Om Swastyastu, ${profile.greetingName}! Cek rute dari parkiran ke ruang kelasmu.`,
     tamu: 'Selamat datang di Kampus INSTIKI. Pusat Informasi ada di Gedung 1 Lt. 1.',
   }[profile.role];
 
